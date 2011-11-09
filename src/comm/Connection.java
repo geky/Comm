@@ -1,0 +1,82 @@
+package comm;
+
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+
+public class Connection {
+	public final int port;
+	public final InetAddress address;
+	
+	public Connection(ByteBuffer b) throws UnknownHostException {
+		byte[] temp = new byte[4];
+		b.get(temp);
+		address = InetAddress.getByAddress(temp);
+		port = b.getShort();
+	}
+	
+	public Connection(InetAddress a, int p) {
+		address = a;
+		port = p;
+	}
+	
+	public Connection(String s) throws UnknownHostException {
+		String[] temp = s.split(":");
+		if (temp.length < 2) {
+			throw new UnknownHostException();
+		} else {
+			address = InetAddress.getByName(temp[0]);
+			port = Integer.parseInt(temp[1]);
+		}
+	}
+	
+	public Connection(String s,int defaultPort) throws UnknownHostException {
+		String[] temp = s.split(":");
+		if (temp.length < 1) {
+			throw new UnknownHostException();
+		} else if (temp.length < 2) {
+			address = InetAddress.getByName(temp[0]);
+			port = defaultPort;
+		} else {
+			address = InetAddress.getByName(temp[0]);
+			port = Integer.parseInt(temp[1]);
+		}
+	}
+	
+	
+	public Connection(DatagramPacket dp) {
+		address = dp.getAddress();
+		port = dp.getPort();
+	}
+	
+	public DatagramPacket setDestination(DatagramPacket dp) {
+		dp.setAddress(address);
+		dp.setPort(port);
+		return dp;
+	}
+	
+	public void toBytes(ByteBuffer b) {
+		b.put(address.getAddress());
+		b.putShort((short)port);
+	}
+	
+	public String toString() {
+		return address.getHostName() + ':' + (port&0xffff);
+	}
+	
+	public int hashCode() {
+		return address.hashCode();
+	}
+	
+	public boolean equals(Object o) {
+		if (!(o instanceof Connection))
+			return false;
+		Connection c = (Connection)o;
+		return address.equals(c.address) && port == c.port; 
+	}
+	
+	public void resolve() {
+		address.getHostName();
+	}
+}
