@@ -268,21 +268,22 @@ public class Comm {
 					ByteBuffer reply = makeBuffer();
 					reply.put(JOIN_ACK_TRUE_BYTE).putLong(time).flip();
 					send(reply,c);
+					return;
+				}
+				
+				Contact temp = source.makeContact(c, b);
+				if (temp != null) {
+					long time = b.getLong();
+					temp.reset(time);
+					contacts.put(c, temp);
+					
+					ByteBuffer reply = makeBuffer();
+					reply.put(JOIN_ACK_TRUE_BYTE).putLong(time).flip();
+					send(reply,c);
 				} else {
-					Contact temp = source.makeContact(c, b);
-					if (temp != null) {
-						long time = b.getLong();
-						temp.reset(time);
-						contacts.put(c, temp);
-						
-						ByteBuffer reply = makeBuffer();
-						reply.put(JOIN_ACK_TRUE_BYTE).putLong(time).flip();
-						send(reply,c);
-					} else {
-						ByteBuffer reply = makeBuffer();
-						reply.put(JOIN_ACK_FALSE_BYTE).flip();
-						send(reply,c);
-					}
+					ByteBuffer reply = makeBuffer();
+					reply.put(JOIN_ACK_FALSE_BYTE).flip();
+					send(reply,c);
 				}
 			}
 		}
@@ -311,6 +312,49 @@ public class Comm {
 			}
 		}
 		
+		private void event(ByteBuffer b, Connection c) {
+			Contact con;
+			synchronized (contacts) {
+				con = contacts.get(c);
+			}
+			if (con == null)
+				return;
+			
+			Event e = new Event(b);
+			
+			boolean doEvent;
+			synchronized (con) {
+				doEvent = con.collideEvent(e);
+			}
+			
+			//if (doEvent) 
+				//Handle events here; TODO
+		}
+		
+		private void data(ByteBuffer b, Connection c) {
+			Contact con;
+			synchronized (contacts) {
+				con = contacts.get(c);
+			}
+			if (con == null)
+				return;
+			
+			List<Event> responses;
+			synchronized (con) {
+				if (!con.isActive())
+					con.activate();
+				
+				responses = con.resolveEvents(b.get());
+			}
+			
+			for (Event r:responses) {
+				send(r.buffer,c);
+			}
+			
+			
+			//TODO handle events
+		}
+		
 		private void serverRequest(ByteBuffer b, Connection c) { 
 			//sure why not let the app run as a server, don't actually know what will happen in this case
 			ByteBuffer temp = makeBuffer().putLong(System.currentTimeMillis() + synchTime);
@@ -321,9 +365,16 @@ public class Comm {
 		
 		private void serverReply(ByteBuffer b, Connection c) {
 			try {
+				//yessssss, I know it is very risky to not synchronize the "syncher" in any way
+				//the "syncher" is actually a thread to get the time from a server, so the naming was probably a bad choice
+				//the only reason this is safe is because the only thread that can set syncher to null is this one
+				//it may be created in other threads, but the cache for multiple processesors will get flushed with the update
+				//of the volatile variable synchtime
 				synchTime = (int)(b.getLong()-System.currentTimeMillis());
-				if (syncher != null)
+				if (syncher != null) {
 					syncher.interrupt();
+					syncher = null;
+				}
 				Connection i = new Connection(b);
 				//me.setConnection(i);
 				//TODO set up user
