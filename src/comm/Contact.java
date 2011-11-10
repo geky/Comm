@@ -83,13 +83,11 @@ public abstract class Contact {
 		}
 	}
 	
-	public synchronized List<Event> resolveEvents(byte mask) {
-		List<Event> ret = new ArrayList<Event>(Byte.SIZE);
+	public synchronized void resolveEvents(List<Event> l, byte mask) {
 		mask ^= eventMask;
 		for (int t=0; mask != 0; mask >>>= 0x1,t++) {
     		if ((mask & 0x1) != 0)
-    			ret.add(events[t]);
+    			l.add(events[t]);
     	}
-		return ret;
 	}
 }

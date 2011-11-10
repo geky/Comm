@@ -214,7 +214,8 @@ public class Comm {
 		}
 	}
 	
-	private class Reciever extends Thread {		
+	private class Reciever extends Thread {	
+		
 		public void run() {
 			while (true) {
 				ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
@@ -312,6 +313,7 @@ public class Comm {
 			}
 		}
 		
+		
 		private void event(ByteBuffer b, Connection c) {
 			Contact con;
 			synchronized (contacts) {
@@ -331,6 +333,9 @@ public class Comm {
 				//Handle events here; TODO
 		}
 		
+		private List<Event> bufferOfResolvedEvents = new ArrayList<Event>(Byte.SIZE);
+		//only used in thread to prevent eccesive memory allocation
+		
 		private void data(ByteBuffer b, Connection c) {
 			Contact con;
 			synchronized (contacts) {
@@ -339,17 +344,17 @@ public class Comm {
 			if (con == null)
 				return;
 			
-			List<Event> responses;
 			synchronized (con) {
 				if (!con.isActive())
 					con.activate();
 				
-				responses = con.resolveEvents(b.get());
+				con.resolveEvents(bufferOfResolvedEvents,b.get());
 			}
 			
-			for (Event r:responses) {
+			for (Event r:bufferOfResolvedEvents) {
 				send(r.buffer,c);
 			}
+			bufferOfResolvedEvents.clear();
 			
 			
 			//TODO handle events
