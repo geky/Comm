@@ -9,19 +9,19 @@ public class Event {
 
 	public ByteBuffer buffer;
 	public int time; //changes to these variables may or may not be reflected in the byte buffer
-	public byte event;
+	public byte usage;
 	public byte bit;
 	public byte bitval;
 	
 	public Event() {
 		buffer = ByteBuffer.allocate(0);
-		time = event = bit = bitval = 0;
+		time = usage = bit = bitval = 0;
 	}
 	
 	public Event(byte e) {
 		buffer = ByteBuffer.allocate(Epyks.MAX_BUFFER_SIZE);
 		buffer.position(10);
-		buffer.put(event=e);
+		buffer.put(usage=e);
 	}
 	
 	public Event(ByteBuffer b) {
@@ -29,7 +29,7 @@ public class Event {
 		bit = bitval = b.get();
 		bitval &= 0x1;
 		bit >>>= 0x2;
-		event = b.get();
+		usage = b.get();
 		buffer = b;
 	}
 	

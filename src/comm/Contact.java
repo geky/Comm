@@ -48,7 +48,7 @@ public abstract class Contact {
 	public synchronized boolean setEvent(Event e) {
 		int min = 0;
 		for (int t=1; t<events.length; t++) { //we can start at t=1 without checking because events must contain 8 indices
-			if (events[t].time == e.time && events[t].event == e.event)
+			if (events[t].time == e.time && events[t].usage == e.usage)
 				return false;
 			if (events[t].time < events[min].time)
 				min = t;
@@ -63,7 +63,7 @@ public abstract class Contact {
 	}
 	
 	public synchronized boolean collideEvent(Event e) {
-		if (e.masked(eventMask) && events[e.bit].time == e.time && events[e.bit].event == e.event)
+		if (e.masked(eventMask) && events[e.bit].time == e.time && events[e.bit].usage == e.usage)
 			return false;
 		
 		if (!e.masked(eventMask)) {

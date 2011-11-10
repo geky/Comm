@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 
@@ -25,63 +26,82 @@ public class Comm {
 	public final static byte SERVER_REQUEST_BYTE = 0x70;
 	public final static byte SERVER_REPLY_BYTE = 0x60;
 	
-	public final Connection NPSERVER = null; //TODO assign these
-	public final Connection NPSERVER_UNUSED = null;
+	public final Connection NPSERVER;
+	public final Connection NPSERVER_UNUSED;
 	
-	public final int BUFFER_SIZE = 512; //TODO adjust this?
-	public final int TIME_DELAY = 1000; //TODO
+	public final int BUFFER_SIZE;
+	public final int TIME_DELAY;
+	public final int TIME_OUT_DELAY;
 	public final int DEFAULT_PORT;
 	private final DatagramSocket SOCKET;
 	
 	private volatile int synchTime;
 	private Thread syncher;
 	
-	private final ContactMaker source;
+	private final ContactControl source;
 	private final Map<Connection,Contact> contacts = new HashMap<Connection,Contact>();
 	private final Map<Connection,Thread> joiners = new HashMap<Connection,Thread>();
 	
 	private boolean verbose = false;
 	
-	public Comm(ContactMaker cm) throws SocketException {
-		SOCKET = new DatagramSocket();
-		DEFAULT_PORT = SOCKET.getPort();
-		source = cm;
-		
-		synch();
-	}
 	
-	public Comm(int defaultPort, ContactMaker cm) throws SocketException {
-		DEFAULT_PORT = defaultPort;
+	public Comm(ContactControl cm, Properties p) throws SocketException {
 		source = cm;
 		
-		DatagramSocket sock;
-		try {
-			sock = new DatagramSocket(defaultPort);
-		} catch (SocketException e) {
-			sock = new DatagramSocket();
-		} 
-		SOCKET = sock;
+		BUFFER_SIZE = Integer.parseInt(p.getProperty("buffer_size","512"));
+		TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
+		TIME_OUT_DELAY = Integer.parseInt(p.getProperty("time_out_delay",4*TIME_DELAY+""));
 		
-		synch();
-	}
-	
-	public Comm(int defaultPort, int defaultRange, ContactMaker cm) throws SocketException {
-		DEFAULT_PORT = defaultPort;
-		source = cm;
-		
-		DatagramSocket sock = null;
-		for (int t=0; t<defaultRange && sock==null; t++) {
+		String port = p.getProperty("default_port");
+		String portRange = p.getProperty("default_range");
+		if (port == null) {
+			SOCKET = new DatagramSocket();
+			DEFAULT_PORT = SOCKET.getPort();
+		} else if (portRange == null) {
+			DatagramSocket sock;
+			DEFAULT_PORT = Integer.parseInt(port);
 			try {
-				sock = new DatagramSocket(defaultPort++); 
+				sock = new DatagramSocket(DEFAULT_PORT);
 			} catch (SocketException e) {
-				sock = null;
+				sock = new DatagramSocket();
+			}
+			SOCKET = sock;
+		} else {
+			DEFAULT_PORT = Integer.parseInt(port);
+			int defaultPortRange = Integer.parseInt(portRange);
+			
+			DatagramSocket sock = null;
+			for (int t=0; t<defaultPortRange && sock==null; t++) {
+				try {
+					sock = new DatagramSocket(DEFAULT_PORT+t); 
+				} catch (SocketException e) {
+					sock = null;
+				}
+			}
+			if (sock == null)
+				sock = new DatagramSocket();
+			SOCKET = sock;
+		}
+		
+		Connection npserver;
+		Connection npunused;
+		try {
+			npserver = new Connection(p.getProperty("npserver"));
+			npunused = new Connection(p.getProperty("npserver_unused",npserver.toString()));
+		} catch (UnknownHostException e) {
+			try {
+				source.status("No server in config, using loopback");
+				npserver = new Connection("127.0.0.1:"+DEFAULT_PORT);
+				npunused = new Connection("127.0.0.1:"+(DEFAULT_PORT-1));
+			} catch (UnknownHostException e2) {
+				source.error("Failed to get loopback as server");
+				npunused = npserver = null;
 			}
 		}
-		if (sock == null)
-			sock = new DatagramSocket();
-		SOCKET = sock;
-		
-		synch();
+		NPSERVER = npserver;
+		NPSERVER_UNUSED = npunused;		
+		if (NPSERVER != null)
+			synch();
 	}
 	
 	public void synch() {
@@ -329,8 +349,8 @@ public class Comm {
 				doEvent = con.collideEvent(e);
 			}
 			
-			//if (doEvent) 
-				//Handle events here; TODO
+			if (doEvent) 
+				source.doEvent(e.usage,e);
 		}
 		
 		private List<Event> bufferOfResolvedEvents = new ArrayList<Event>(Byte.SIZE);
@@ -356,8 +376,10 @@ public class Comm {
 			}
 			bufferOfResolvedEvents.clear();
 			
-			
-			//TODO handle events
+			byte usage;
+			while (b.hasRemaining() && (usage = b.get()) != 0x0) {
+				source.doData(usage, b);
+			}
 		}
 		
 		private void serverRequest(ByteBuffer b, Connection c) { 
@@ -381,10 +403,10 @@ public class Comm {
 					syncher = null;
 				}
 				Connection i = new Connection(b);
-				//me.setConnection(i);
-				//TODO set up user
+				
+				source.setOwnerConnection(i);
 			} catch (UnknownHostException e) {
-				//me.status("Nonfunctional IP?", Color.RED);
+				source.error("Unusable IP?");
 				e.printStackTrace();
 			}
 		}

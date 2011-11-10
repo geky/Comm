@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 
 public class NPServer extends Thread {	
-	public final static int DEFAULT_PORT = 11111;
+	public final static int DEFAULT_PORT = 11110;
 	
 	public final static byte REQUEST_BYTE = 0x70;
 	public final static byte REPLY_BYTE = 0x60;

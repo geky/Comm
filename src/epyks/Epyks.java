@@ -312,7 +312,7 @@ public class Epyks extends JFrame {
 		synchronized(events) {
 			int min = 0;
 			for (int t=1; t<events.length; t++) { //we can start at t=1 without checking because events contains 32 indices
-				if (events[t].time == e.time && events[t].event == e.event)
+				if (events[t].time == e.time && events[t].usage == e.usage)
 					return false;
 				if (events[t].time < events[min].time)
 					min = t;
@@ -573,7 +573,7 @@ public class Epyks extends JFrame {
 			synchronized(events) {
 				if (e.time+timeStart < eventResetTime)
 					return;
-				if (e.masked(eventMask) && events[e.bit].time == e.time && events[e.bit].event == e.event)
+				if (e.masked(eventMask) && events[e.bit].time == e.time && events[e.bit].usage == e.usage)
 					return;
 				
 				if (!e.masked(eventMask)) {
@@ -594,7 +594,7 @@ public class Epyks extends JFrame {
 				}
 			}
 			
-			Plugin p = dataPlugins.get(e.event);
+			Plugin p = dataPlugins.get(e.usage);
 			if (p != null)
 				p.doEvent(e);
 		}
