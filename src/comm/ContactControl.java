@@ -10,10 +10,5 @@ public interface ContactControl {
 	public void status(String s);
 	public void error(String s);
 	
-	//every event or data stream is tagged with a byte representing who sent it
-	// the byte 0x0 should be reserved as an end of stream byte
-	public doData(byte usage, ByteBuffer b);
-	public doEvent(byte usage, Event e);
-	
 	public void setOwnerConnection(Connection c);
 }

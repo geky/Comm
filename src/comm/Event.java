@@ -13,7 +13,7 @@ public class Event {
 	public byte bit;
 	public byte bitval;
 	
-	public Event() {
+	protected Event() {
 		buffer = ByteBuffer.allocate(0);
 		time = usage = bit = bitval = 0;
 	}

@@ -8,6 +8,7 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -44,9 +45,12 @@ public class Comm {
 	
 	private boolean verbose = false;
 	
+	private final Map<Byte,Usage> uses;
 	
-	public Comm(ContactControl cm, Properties p) throws SocketException {
+	public Comm(ContactControl cm, Map<Byte,Usage> u, Properties p) throws SocketException {
 		source = cm;
+		
+		uses = Collections.unmodifiableMap(u);
 		
 		BUFFER_SIZE = Integer.parseInt(p.getProperty("buffer_size","512"));
 		TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
@@ -162,6 +166,10 @@ public class Comm {
 		}
 	}
 	
+	public void send(ByteBuffer b,Contact c) {
+		send(b,c.connection);
+	}
+	
 	public void send(ByteBuffer b,Connection dest) {
 		DatagramPacket dp = new DatagramPacket(b.array(),b.limit(),null,DEFAULT_PORT);
 		dest.setDestination(dp);
@@ -173,6 +181,26 @@ public class Comm {
 			SOCKET.send(dp);
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+	}
+	
+	public void sendEvent(Event e, Contact c) {
+		e.time = (int)(System.currentTimeMillis() + synchTime - c.getTimeOrigin());
+		e.buffer.put(EVENT_BYTE).putInt(e.time);
+		e.buffer.rewind();
+		if (c.setEvent(e)) {
+			send(e.buffer,c.connection);
+		}
+	}
+	
+	public void sendEvents(Event[] evs, Contact c) {
+		int temp = (int)(System.currentTimeMillis() + synchTime - c.getTimeOrigin());
+		for (Event e:evs) {
+			e.buffer.put(EVENT_BYTE).putInt(temp++);
+			e.buffer.rewind();
+			if (c.setEvent(e)) {
+				send(e.buffer,c.connection);
+			}
 		}
 	}
 	
@@ -201,7 +229,13 @@ public class Comm {
 		System.out.println("]");
 	}
 	
-	public void add(final Contact c) {
+	public class Sender extends Thread {
+		public void run() {
+			
+		}
+	}
+	
+	public void add(Contact c) {
 		c.lose();
 		synchronized (contacts) {
 			contacts.put(c.connection,c);
@@ -350,7 +384,7 @@ public class Comm {
 			}
 			
 			if (doEvent) 
-				source.doEvent(e.usage,e);
+				uses.get(e.usage).doEvent(e);
 		}
 		
 		private List<Event> bufferOfResolvedEvents = new ArrayList<Event>(Byte.SIZE);
@@ -378,7 +412,7 @@ public class Comm {
 			
 			byte usage;
 			while (b.hasRemaining() && (usage = b.get()) != 0x0) {
-				source.doData(usage, b);
+				uses.get(usage).doData(b);
 			}
 		}
 		

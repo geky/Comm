@@ -6,6 +6,8 @@ import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 
+//Written by Geky
+
 public class NPServer extends Thread {	
 	public final static int DEFAULT_PORT = 11110;
 	
@@ -41,7 +43,7 @@ public class NPServer extends Thread {
 			try {
 				sock.receive(hit);
 			} catch (IOException e) {
-				System.out.println("IOException thrown when receiving packet!");
+				System.err.println("IOException thrown when receiving packet!");
 				e.printStackTrace();
 			}
 			if (buffer[0] == REQUEST_BYTE) {
@@ -57,7 +59,7 @@ public class NPServer extends Thread {
 				try {
 					sock.send(reply);
 				} catch (IOException e) {
-					System.out.println("IOException thrown when sending packet!");
+					System.err.println("IOException thrown when sending packet!");
 					e.printStackTrace();
 				}
 				
