@@ -1,6 +1,5 @@
 package comm;
 
-import java.awt.Color;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -10,12 +9,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Properties;
-import java.util.Set;
 
 
 public class Comm {
@@ -96,11 +93,9 @@ public class Comm {
 			npunused = new Connection(p.getProperty("npserver_unused",s));
 		} catch (UnknownHostException e) {
 			try {
-				source.status("No server in config, using loopback");
 				npserver = new Connection("127.0.0.1:"+DEFAULT_PORT);
 				npunused = new Connection("127.0.0.1:"+(DEFAULT_PORT-1));
 			} catch (UnknownHostException e2) {
-				source.error("Failed to get loopback as server");
 				npunused = npserver = null;
 			}
 		}
@@ -116,29 +111,37 @@ public class Comm {
 	}
 	
 	public void synch() {
+		source.status("resolving...");
+		
 		final ByteBuffer request = makeBuffer();
 		request.put(SERVER_REQUEST_BYTE).flip();
 		
-		new Thread() {			
-			public void run() {		
-				NPSERVER.resolve();
-				
-				for (int t=0; t<4; t++) {
-					send(request,NPSERVER);
-					try {
-						Thread.sleep(TIME_DELAY);
-					} catch (InterruptedException e) {
-						return;
+		synchronized (joiners) {
+			syncher = new Thread() {
+				public void run() {		
+					NPSERVER.resolve();
+					
+					String attempt = "synching....";
+					
+					for (int t=0; t<4; t++) {
+						source.status(attempt.substring(0, attempt.length()-3+t));
+						send(request,NPSERVER);
+						try {
+							Thread.sleep(TIME_DELAY);
+						} catch (InterruptedException e) {
+							return;
+						}
+					}
+					
+					synchronized (joiners) {
+						for (Thread t:joiners.values()) {
+							t.start();
+						}
 					}
 				}
-				
-				synchronized (joiners) {
-					for (Thread t:joiners.values()) {
-						t.start();
-					}
-				}
-			}
-		}.start();
+			};
+			syncher.start();
+		}
 	}
 	
 	public ByteBuffer makeBuffer() {
@@ -258,6 +261,7 @@ public class Comm {
 	
 	public class Sender extends Thread {
 		
+		@Override
 		public void run() {
 			while (true) {
 				
@@ -327,11 +331,16 @@ public class Comm {
 		reply.putLong(time);
 		reply.flip();
 		
-		Thread temp = new Thread() {			
-			public void run() {		
+		Thread temp = new Thread() {
+			public void run() {	
+				c.status("resolving...");
+				
 				c.connection.resolve();
 				
+				String attempt = "joining....";
+				
 				for (int t=0; t<4; t++) {
+					source.status(attempt.substring(0, attempt.length()-3+t));
 					send(reply,c.connection);
 					try {
 						Thread.sleep(TIME_DELAY);
@@ -344,31 +353,34 @@ public class Comm {
 		
 		synchronized (joiners) {
 			joiners.put(c.connection,temp);
+			if (syncher != null)
+				temp.start();
 		}
 	}
 	
-	private class Joiner extends Thread {
-		Connection c;
-		ByteBuffer b;
-		
-		public Joiner(Connection tc, ByteBuffer tb) {
-			c = tc;
-			b = tb;
-		}
-		
-		public void run() {		
-			c.resolve();
-			
-			for (int t=0; t<4; t++) {
-				send(b,c);
-				try {
-					Thread.sleep(TIME_DELAY);
-				} catch (InterruptedException e) {
-					return;
-				}
-			}
-		}
-	}
+//	private class Joiner extends Thread {
+//		Connection c;
+//		ByteBuffer b;
+//		
+//		public Joiner(Connection tc, ByteBuffer tb) {
+//			c = tc;
+//			b = tb;
+//		}
+//		
+//		@Override
+//		public void run() {		
+//			c.resolve();
+//			
+//			for (int t=0; t<4; t++) {
+//				send(b,c);
+//				try {
+//					Thread.sleep(TIME_DELAY);
+//				} catch (InterruptedException e) {
+//					return;
+//				}
+//			}
+//		}
+//	}
 	
 	public void remove(Contact c) {
 		synchronized (joiners) {
@@ -381,6 +393,7 @@ public class Comm {
 	
 	private class Reciever extends Thread {	
 		
+		@Override
 		public void run() {
 			while (true) {
 				ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
@@ -538,16 +551,14 @@ public class Comm {
 		
 		private void serverReply(ByteBuffer b, Connection c) {
 			try {
-				//yessssss, I know it is very risky to not synchronize the "syncher" in any way
-				//the "syncher" is actually a thread to get the time from a server, so the naming was probably a bad choice
-				//the only reason this is safe is because the only thread that can set syncher to null is this one
-				//it may be created in other threads, but the cache for multiple processesors will get flushed with the update
-				//of the volatile variable synchtime
 				synchTime = (int)(b.getLong()-System.currentTimeMillis());
-				if (syncher != null) {
-					syncher.interrupt();
-					syncher = null;
+				synchronized (joiners) {
+					if (syncher != null) {
+						syncher.interrupt();
+						syncher = null;
+					}
 				}
+				
 				Connection i = new Connection(b);
 				
 				source.setOwnerConnection(i);
