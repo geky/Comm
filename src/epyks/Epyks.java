@@ -67,105 +67,8 @@ import net.miginfocom.swing.MigLayout;
 
 
 public class Epyks extends JFrame {
-		
-	public static final int DEFAULT_PORT;
-	public static final int MAX_BUFFER_SIZE;
-	
-	public static final Connection NPSERVER;
-	public static final Connection NPSERVER_UNUSED;
-	
-	public static final int TIME_OUT;
-	public static final int TIME_PING;
-	
-	public static final boolean DUMP_PACKETS;
-	private static final PrintStream PACKET_DUMP;
-	
-	private static final DatagramSocket SOCKET;	
-	
-	static {
-		Connection npserver,npsunused;
-		int bufsize,defport,tout,tping;
-		boolean dpacks;
-		
-		try {
-			Scanner config = new Scanner(new File("data/config"));
-			
-			config.next();
-			npserver = new Connection(config.next());
-			config.next();
-			npsunused = new Connection(config.next());
-			config.next();
-			bufsize = config.nextInt();
-			config.next();
-			defport = config.nextInt();
-			config.next();
-			tout = config.nextInt();
-			config.next();
-			tping = config.nextInt();
-			config.next();
-			dpacks = config.nextBoolean();
-			config.close();
-		} catch (Exception e) {
-			//TODO show to user and try to recreate file
-			e.printStackTrace();
-			try {
-				npsunused = npserver = new Connection(InetAddress.getByAddress(new byte[] {127,0,0,1}),11110);
-			} catch (UnknownHostException e1) {
-				//TODO show user
-				System.err.println("Could not get loopback??");
-				e1.printStackTrace();
-				npsunused = npserver = null;
-			}
-			bufsize = 256;
-			defport = 11110;
-			tout = 4000;
-			tping = 1000;
-			dpacks = false;
-		}
-		
-		NPSERVER = npserver;
-		NPSERVER_UNUSED = npsunused;
-		MAX_BUFFER_SIZE = bufsize;
-		DEFAULT_PORT = defport;
-		TIME_OUT = tout;
-		TIME_PING = tping;
-		
-		
-		DatagramSocket sock;
-		try {
-			sock = new DatagramSocket(DEFAULT_PORT);
-		} catch (SocketException e) {
-			//TODO alert user
-			e.printStackTrace();
-			try {
-				sock = new DatagramSocket();
-			} catch (SocketException e1) {
-				// TODO alert user
-				e1.printStackTrace();
-				sock = null;
-			}
-		}
-		SOCKET = sock;    
-		
-		PrintStream pdump;
-		if (dpacks) {
-			try {
-				pdump = new PrintStream(new BufferedOutputStream(new FileOutputStream("data/port" + sock.getLocalPort() + "dump")),true);
-			} catch (FileNotFoundException e) {
-				e.printStackTrace();
-				dpacks = false;
-				pdump = null;
-			}
-		} else {
-			pdump = null;
-		}
-		
-		DUMP_PACKETS = dpacks;
-		PACKET_DUMP = pdump;
-	}
 	
 	public static void main(String[] args) {
-		
 		try {
 			UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
 		} catch (Exception e) {
@@ -175,9 +78,7 @@ public class Epyks extends JFrame {
 		javax.swing.SwingUtilities.invokeLater(
 			new Runnable() {
 				public void run() {
-					current = new Epyks();
-					current.new Reciever().start();
-					current.new SendingStream().start();	            
+					current = new Epyks();	            
 				}
 			}
 		);
@@ -185,33 +86,8 @@ public class Epyks extends JFrame {
 	
 	private static JPanel peersPanel;
 	private static JPanel pendingPeersPanel;
-	private static Map<Connection,PeerPanel> pendingPeers;
-	private static Map<Connection,PeerPanel> peers; //must synchronize on peers
 	
-	private static volatile int eventMask;
-	private static Event[] events; //must synchronize with events before affecting data
-	private static long eventResetTime;
-	
-	private static User me;
-	private static Epyks current;
-	
-	private volatile static boolean synched = false; //just made all of these volatile so no lock is gained when getting time
-	private volatile static int synchTime = 0;    //which happens quite a lot. Thought of just volatiling synched, but this may cause
-	private volatile static long timeStart;   //problems for VMs before 1.5 and would be confusing
-	
-	private final Map<Byte,Plugin> dataPlugins; //dataPlugins is a synchronized and unmodifiable map
 	private final Plugin[] plugins; 
-	
-	
-	static {
-		eventResetTime = timeStart = System.currentTimeMillis();
-		
-		events = new Event[32];
-		Arrays.fill(events, new Event());
-		eventMask = 0;
-		
-		me = new User();
-	}
 	
 	public Epyks() {
 		super("Epyks");

@@ -50,10 +50,8 @@ public class Connection {
 		port = dp.getPort();
 	}
 	
-	public DatagramPacket setDestination(DatagramPacket dp) {
-		dp.setAddress(address);
-		dp.setPort(port);
-		return dp;
+	public DatagramPacket makePacket(ByteBuffer b) {
+		return new DatagramPacket(b.array(),b.limit(),address,port);
 	}
 	
 	public void toBytes(ByteBuffer b) {

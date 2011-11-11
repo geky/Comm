@@ -4,7 +4,7 @@ server_unused=127.0.0.1\:11109
 buffer_size=512
 default_port=11111
 
-time_out=4000
+time_out_delay=4000
 time_ping=1000
 
 dump_packets=true

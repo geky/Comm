@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Set;
 
@@ -90,8 +91,9 @@ public class Comm {
 		Connection npserver;
 		Connection npunused;
 		try {
-			npserver = new Connection(p.getProperty("npserver"));
-			npunused = new Connection(p.getProperty("npserver_unused",npserver.toString()));
+			String s = p.getProperty("npserver");
+			npserver = new Connection(s);
+			npunused = new Connection(p.getProperty("npserver_unused",s));
 		} catch (UnknownHostException e) {
 			try {
 				source.status("No server in config, using loopback");
@@ -103,9 +105,14 @@ public class Comm {
 			}
 		}
 		NPSERVER = npserver;
-		NPSERVER_UNUSED = npunused;		
+		NPSERVER_UNUSED = npunused;
+	}
+	
+	public void start() {
 		if (NPSERVER != null)
 			synch();
+		new Sender().start();
+		new Reciever().start();
 	}
 	
 	public void synch() {
@@ -119,8 +126,8 @@ public class Comm {
 		return ByteBuffer.allocate(BUFFER_SIZE);
 	}
 	
-	public int time(Contact c) {
-		return (int)(System.currentTimeMillis() + synchTime - c.getTimeOrigin());
+	public Event makeEvent(byte usage) {
+		return new Event(usage, BUFFER_SIZE);
 	}
 	
 	private class Repeater extends Thread {
@@ -146,33 +153,32 @@ public class Comm {
 		}
 	}
 	
-	public void send(ByteBuffer b) {
-		DatagramPacket dp = new DatagramPacket(b.array(),b.limit(),null,DEFAULT_PORT);
-		
-		if (DUMP_PACKETS)
-			dump("Sent to all Peers", b.array(), b.limit());
-		
-		synchronized (contacts) {
-			for (Map.Entry<Connection,Contact> p : contacts.entrySet()) {
-				if (p.getValue().isActive()) {
-					p.getKey().setDestination(dp);
-					try {
-						SOCKET.send(dp);
-					} catch (IOException e) {
-						e.printStackTrace();
-					}
-				}
-			}
-		}
-	}
+//	public void send(ByteBuffer b) {
+//		DatagramPacket dp = new DatagramPacket(b.array(),b.limit(),null,DEFAULT_PORT);
+//		
+//		if (DUMP_PACKETS)
+//			dump("Sent to all Peers", b.array(), b.limit());
+//		
+//		synchronized (contacts) {
+//			for (Map.Entry<Connection,Contact> p : contacts.entrySet()) {
+//				if (p.getValue().isActive()) {
+//					p.getKey().setDestination(dp);
+//					try {
+//						SOCKET.send(dp);
+//					} catch (IOException e) {
+//						e.printStackTrace();
+//					}
+//				}
+//			}
+//		}
+//	}
 	
 	public void send(ByteBuffer b,Contact c) {
 		send(b,c.connection);
 	}
 	
 	public void send(ByteBuffer b,Connection dest) {
-		DatagramPacket dp = new DatagramPacket(b.array(),b.limit(),null,DEFAULT_PORT);
-		dest.setDestination(dp);
+		DatagramPacket dp = dest.makePacket(b);
 		
 		if (DUMP_PACKETS)
 			dump("Sent to " + dest.toString(), b.array(), b.limit());
@@ -185,7 +191,7 @@ public class Comm {
 	}
 	
 	public void sendEvent(Event e, Contact c) {
-		e.time = (int)(System.currentTimeMillis() + synchTime - c.getTimeOrigin());
+		e.time = c.time();
 		e.buffer.put(EVENT_BYTE).putInt(e.time);
 		e.buffer.rewind();
 		if (c.setEvent(e)) {
@@ -194,7 +200,7 @@ public class Comm {
 	}
 	
 	public void sendEvents(Event[] evs, Contact c) {
-		int temp = (int)(System.currentTimeMillis() + synchTime - c.getTimeOrigin());
+		int temp = c.time();
 		for (Event e:evs) {
 			e.buffer.put(EVENT_BYTE).putInt(temp++);
 			e.buffer.rewind();
@@ -230,8 +236,57 @@ public class Comm {
 	}
 	
 	public class Sender extends Thread {
+		
 		public void run() {
-			
+			while (true) {
+				
+				boolean foreverAlone = true;
+				synchronized (contacts) {
+					for (Contact c : contacts.values()) {
+						synchronized (c) {
+							if (c.isActive()) {
+								if (c.touchedLast() > TIME_OUT_DELAY)
+									c.lose();
+								else
+									foreverAlone = false;
+							}
+						}
+					}
+				}
+				
+				if (foreverAlone) {
+					ByteBuffer data = makeBuffer();
+					data.put(KEEP_OPEN_BYTE);
+					data.flip();
+					send(data,NPSERVER_UNUSED);
+				} else {
+					ByteBuffer data = makeBuffer();
+					data.put(DATA_BYTE);
+					data.position(2);
+					
+					for (Entry<Byte,Usage> entry:uses.entrySet()) {
+						data.put(entry.getKey());
+						entry.getValue().pollData(data);
+					}
+					if (data.hasRemaining())
+						data.put((byte)0x0);
+					data.flip();
+					
+					synchronized (contacts) {
+						for (Contact c:contacts.values()) {
+							data.position(1);
+							data.put(c.getEventMask());
+							send(data,c.connection);
+						}
+					}
+				}
+				
+				try {
+					sleep(TIME_DELAY);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 	
@@ -316,7 +371,7 @@ public class Comm {
 						long oldTime = sender.getTimeOrigin();
 						if (oldTime < time)
 							time = oldTime;
-						sender.reset(time);
+						sender.reset(time,synchTime);
 						sender.activate();
 					}
 					
@@ -329,7 +384,7 @@ public class Comm {
 				Contact temp = source.makeContact(c, b);
 				if (temp != null) {
 					long time = b.getLong();
-					temp.reset(time);
+					temp.reset(time,synchTime);
 					contacts.put(c, temp);
 					
 					ByteBuffer reply = makeBuffer();
@@ -356,7 +411,7 @@ public class Comm {
 				long oldTime = con.getTimeOrigin();
 				if (oldTime < time)
 					time = oldTime;
-				con.reset(time);
+				con.reset(time,synchTime);
 				con.activate();
 			}
 		}
@@ -401,6 +456,7 @@ public class Comm {
 			synchronized (con) {
 				if (!con.isActive())
 					con.activate();
+				con.touch();
 				
 				con.resolveEvents(bufferOfResolvedEvents,b.get());
 			}

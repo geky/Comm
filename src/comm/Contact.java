@@ -11,8 +11,9 @@ public abstract class Contact {
 	private byte eventMask;
 	private final Event[] events;
 	
-	private int pingTime = -1;
+	private int lastTouched;
 	private long timeOrigin;
+	private int synchTime;
 	private boolean active = false;
 	
 	public Contact(Connection c) {
@@ -21,7 +22,11 @@ public abstract class Contact {
 		eventMask = 0;
 		Arrays.fill(events, new Event());
 		timeOrigin = Long.MAX_VALUE;
+		lastTouched = 0;
 	}
+	
+	public abstract void status(String s);
+	public abstract void error(String s);
 	
 	public synchronized boolean isActive() {
 		return active;
@@ -35,14 +40,32 @@ public abstract class Contact {
 		active = false;
 	}
 	
+	public synchronized int touchedLast() {
+		return time() - lastTouched;
+	}
+	
+	public synchronized void touch() {
+		lastTouched = time();
+	}
+	
+	public synchronized int time() {
+		return (int)(System.currentTimeMillis() + synchTime - timeOrigin);
+	}
+	
 	public synchronized long getTimeOrigin() {
 		return timeOrigin;
 	}
 	
-	public synchronized void reset(long time) {
+	public synchronized void reset(long time, int synch) {
 		eventMask = 0;
 		Arrays.fill(events, new Event());
 		timeOrigin = time;
+		synchTime = synch;
+		lastTouched = 0;
+	}
+	
+	public synchronized byte getEventMask() {
+		return eventMask;
 	}
 	
 	public synchronized boolean setEvent(Event e) {

@@ -18,13 +18,13 @@ public class Event {
 		time = usage = bit = bitval = 0;
 	}
 	
-	public Event(byte e) {
-		buffer = ByteBuffer.allocate(Epyks.MAX_BUFFER_SIZE);
+	public Event(byte e, int size) {
+		buffer = ByteBuffer.allocate(size);
 		buffer.position(10);
 		buffer.put(usage=e);
 	}
 	
-	public Event(ByteBuffer b) {
+	protected Event(ByteBuffer b) {
 		time = b.getInt();
 		bit = bitval = b.get();
 		bitval &= 0x1;
