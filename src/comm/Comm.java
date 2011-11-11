@@ -34,6 +34,7 @@ public class Comm {
 	public final int TIME_DELAY;
 	public final int TIME_OUT_DELAY;
 	public final int DEFAULT_PORT;
+	public final boolean DUMP_PACKETS;
 	private final DatagramSocket SOCKET;
 	
 	private volatile int synchTime;
@@ -42,8 +43,6 @@ public class Comm {
 	private final ContactControl source;
 	private final Map<Connection,Contact> contacts = new HashMap<Connection,Contact>();
 	private final Map<Connection,Thread> joiners = new HashMap<Connection,Thread>();
-	
-	private boolean verbose = false;
 	
 	private final Map<Byte,Usage> uses;
 	
@@ -55,6 +54,7 @@ public class Comm {
 		BUFFER_SIZE = Integer.parseInt(p.getProperty("buffer_size","512"));
 		TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
 		TIME_OUT_DELAY = Integer.parseInt(p.getProperty("time_out_delay",4*TIME_DELAY+""));
+		DUMP_PACKETS = Boolean.parseBoolean(p.getProperty("dump_packets", "false"));
 		
 		String port = p.getProperty("default_port");
 		String portRange = p.getProperty("default_range");
@@ -149,7 +149,7 @@ public class Comm {
 	public void send(ByteBuffer b) {
 		DatagramPacket dp = new DatagramPacket(b.array(),b.limit(),null,DEFAULT_PORT);
 		
-		if (verbose)
+		if (DUMP_PACKETS)
 			dump("Sent to all Peers", b.array(), b.limit());
 		
 		synchronized (contacts) {
@@ -174,7 +174,7 @@ public class Comm {
 		DatagramPacket dp = new DatagramPacket(b.array(),b.limit(),null,DEFAULT_PORT);
 		dest.setDestination(dp);
 		
-		if (verbose)
+		if (DUMP_PACKETS)
 			dump("Sent to " + dest.toString(), b.array(), b.limit());
 		
 		try {
@@ -284,7 +284,7 @@ public class Comm {
 		        Connection c = new Connection(packet);
 		        byte head = buffer.get();
 		        
-		        if (verbose) {
+		        if (DUMP_PACKETS) {
 		        	byte[] temp = buffer.array();
 		        	int len = buffer.limit();
 		        	while (len > 0  && temp[len-1] == 0) {

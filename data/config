@@ -1,7 +1,10 @@
-server: 127.0.0.1:11111
-server-unused: 127.0.0.1:11112
-buffer-size: 512
-default-port: 11110
-time-out: 4000
-time-ping: 1000
-dump-packets: true
+server=127.0.0.1\:11110
+server_unused=127.0.0.1\:11109
+
+buffer_size=512
+default_port=11111
+
+time_out=4000
+time_ping=1000
+
+dump_packets=true
