@@ -116,10 +116,29 @@ public class Comm {
 	}
 	
 	public void synch() {
-		ByteBuffer request = makeBuffer();
+		final ByteBuffer request = makeBuffer();
 		request.put(SERVER_REQUEST_BYTE).flip();
-		syncher = new Repeater(NPSERVER,request);
-		syncher.start();
+		
+		new Thread() {			
+			public void run() {		
+				NPSERVER.resolve();
+				
+				for (int t=0; t<4; t++) {
+					send(request,NPSERVER);
+					try {
+						Thread.sleep(TIME_DELAY);
+					} catch (InterruptedException e) {
+						return;
+					}
+				}
+				
+				synchronized (joiners) {
+					for (Thread t:joiners.values()) {
+						t.start();
+					}
+				}
+			}
+		}.start();
 	}
 	
 	public ByteBuffer makeBuffer() {
@@ -130,28 +149,30 @@ public class Comm {
 		return new Event(usage, BUFFER_SIZE);
 	}
 	
-	private class Repeater extends Thread {
-		Connection c;
-		ByteBuffer b;
-		
-		public Repeater(Connection tc, ByteBuffer tb) {
-			c = tc;
-			b = tb;
-		}
-		
-		public void run() {		
-			c.resolve();
-			
-			for (int t=0; t<4; t++) {
-				send(b,c);
-				try {
-					Thread.sleep(TIME_DELAY);
-				} catch (InterruptedException e) {
-					return;
-				}
-			}
-		}
-	}
+//	private class Joiner extends Thread {
+//		Connection c;
+//		ByteBuffer b;
+//		
+//		public Joiner(Connection tc, ByteBuffer tb) {
+//			c = tc;
+//			b = tb;
+//		}
+//		
+//		public void run() {		
+//			c.resolve();
+//			
+//			for (int t=0; t<4; t++) {
+//				send(b,c);
+//				try {
+//					Thread.sleep(TIME_DELAY);
+//				} catch (InterruptedException e) {
+//					return;
+//				}
+//			}
+//		}
+//	}
+	
+	
 	
 //	public void send(ByteBuffer b) {
 //		DatagramPacket dp = new DatagramPacket(b.array(),b.limit(),null,DEFAULT_PORT);
@@ -290,7 +311,7 @@ public class Comm {
 		}
 	}
 	
-	public void add(Contact c) {
+	public void add(final Contact c) {
 		c.lose();
 		synchronized (contacts) {
 			contacts.put(c.connection,c);
@@ -306,11 +327,46 @@ public class Comm {
 		reply.putLong(time);
 		reply.flip();
 		
-		Thread temp = new Repeater(c.connection,reply);
-		temp.start();
+		Thread temp = new Thread() {			
+			public void run() {		
+				c.connection.resolve();
+				
+				for (int t=0; t<4; t++) {
+					send(reply,c.connection);
+					try {
+						Thread.sleep(TIME_DELAY);
+					} catch (InterruptedException e) {
+						return;
+					}
+				}
+			}
+		};
 		
 		synchronized (joiners) {
 			joiners.put(c.connection,temp);
+		}
+	}
+	
+	private class Joiner extends Thread {
+		Connection c;
+		ByteBuffer b;
+		
+		public Joiner(Connection tc, ByteBuffer tb) {
+			c = tc;
+			b = tb;
+		}
+		
+		public void run() {		
+			c.resolve();
+			
+			for (int t=0; t<4; t++) {
+				send(b,c);
+				try {
+					Thread.sleep(TIME_DELAY);
+				} catch (InterruptedException e) {
+					return;
+				}
+			}
 		}
 	}
 	
