@@ -30,7 +30,6 @@ public class Comm {
 	
 	public final int BUFFER_SIZE;
 	public final int TIME_DELAY;
-	public final int TIME_OUT_DELAY;
 	public final int DEFAULT_PORT;
 	public final boolean DUMP_PACKETS;
 	private final DatagramSocket SOCKET;
@@ -50,7 +49,6 @@ public class Comm {
 		
 		BUFFER_SIZE = Integer.parseInt(p.getProperty("buffer_size","512"));
 		TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
-		TIME_OUT_DELAY = Integer.parseInt(p.getProperty("time_out_delay",4*TIME_DELAY+""));
 		DUMP_PACKETS = Boolean.parseBoolean(p.getProperty("dump_packets", "false"));
 		
 		String port = p.getProperty("default_port");
@@ -117,9 +115,7 @@ public class Comm {
 		
 		synchronized (joiners) {
 			syncher = new Thread() {
-				public void run() {		
-					NPSERVER.resolve();
-					
+				public void run() {					
 					String attempt = "synching....";
 					
 					for (int t=0; t<4; t++) {
@@ -300,6 +296,7 @@ public class Comm {
 	}
 	
 	public void add(final Contact c) {
+		c.status("resolving...");
 		c.lose();
 		synchronized (contacts) {
 			contacts.put(c.connection,c);
@@ -311,10 +308,6 @@ public class Comm {
 		
 		Thread temp = new Thread() {
 			public void run() {	
-				c.status("resolving...");
-				
-				c.connection.resolve();
-				
 				String attempt = "joining....";
 				
 				for (int t=0; t<4; t++) {

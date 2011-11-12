@@ -60,7 +60,7 @@ public class Connection {
 	}
 	
 	public String toString() {
-		return address.getHostName() + ':' + (port&0xffff);
+		return address.getHostAddress() + ':' + (port&0xffff);
 	}
 	
 	public int hashCode() {
@@ -72,9 +72,5 @@ public class Connection {
 			return false;
 		Connection c = (Connection)o;
 		return address.equals(c.address) && port == c.port; 
-	}
-	
-	public void resolve() {
-		address.getHostName();
 	}
 }

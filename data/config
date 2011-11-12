@@ -1,11 +1,9 @@
-server=127.0.0.1\:11111
-server_unused=127.0.0.1\:11109
-synch=true
+server=76.255.179.114\:11110
+server_unused=76.255.179.114\:11109
 
 buffer_size=512
 default_port=11111
 
-time_out_delay=4000
-time_ping=1000
+time_delay=1000
 
 dump_packets=true
