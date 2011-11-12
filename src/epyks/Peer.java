@@ -6,6 +6,7 @@ import java.io.IOException;
 
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
+import javax.swing.SwingUtilities;
 
 import comm.Connection;
 import comm.Contact;
@@ -34,14 +35,26 @@ public class Peer extends Contact {
 	}
 
 	@Override
-	public synchronized void activate() {
+	public void activate() {
 		super.activate();
-		panel.makeActivePanel(pic,name,connection);
+		SwingUtilities.invokeLater(
+				new Runnable() {
+					public void run() {
+						panel.makeActivePanel(pic,name,connection);
+					}
+				}
+			);
 	}
 
 	@Override
-	public synchronized void lose() {
+	public void lose() {
 		super.lose();
-		panel.makeLostPanel(name,connection);
+		SwingUtilities.invokeLater(
+				new Runnable() {
+					public void run() {
+						panel.makeLostPanel(name,connection);
+					}
+				}
+			);
 	}
 }

@@ -2,6 +2,7 @@ package epyks.plugins;
 
 import java.nio.ByteBuffer;
 
+import comm.Contact;
 import comm.Event;
 
 import epyks.PeerPanel;
@@ -15,7 +16,7 @@ public class MessagePlugin extends Plugin {
 	}
 	
 	@Override
-	public byte getByte() {
+	public byte usage() {
 		return 0x22;
 	}
 
@@ -23,13 +24,7 @@ public class MessagePlugin extends Plugin {
 	public void pollData(ByteBuffer b) {}
 
 	@Override
-	public void doEvent(Event e) {
-		// TODO Auto-generated method stub
-		
-	}
-
-	@Override
-	public void doData(PeerPanel p, ByteBuffer b) {
+	public void doEvent(Contact s, Event e) {
 		// TODO Auto-generated method stub
 		
 	}

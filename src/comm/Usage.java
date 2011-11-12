@@ -6,7 +6,7 @@ import epyks.PeerPanel;
 
 public interface Usage {
 	public void pollData(ByteBuffer b);
-	public void doData(ByteBuffer b);
-	public void doEvent(Event e);
+	public void doData(Contact s, ByteBuffer b);
+	public void doEvent(Contact s, Event e);
 	public byte usage();
 }

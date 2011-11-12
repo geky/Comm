@@ -42,9 +42,9 @@ public class Comm {
 	private final Map<Connection,Contact> contacts = new HashMap<Connection,Contact>();
 	private final Map<Connection,Thread> joiners = new HashMap<Connection,Thread>();
 	
-	private final Map<Byte,Usage> uses;
+	private final Map<Byte,? extends Usage> uses;
 	
-	public Comm(ContactControl cm, Map<Byte,Usage> u, Properties p) throws SocketException {
+	public Comm(ContactControl cm, Map<Byte,? extends Usage> u, Properties p) throws SocketException {
 		source = cm;
 		
 		uses = Collections.unmodifiableMap(u);
@@ -88,9 +88,9 @@ public class Comm {
 		Connection npserver;
 		Connection npunused;
 		try {
-			String s = p.getProperty("npserver");
+			String s = p.getProperty("npserver","127.0.0.1:"+DEFAULT_PORT);
 			npserver = new Connection(s);
-			npunused = new Connection(p.getProperty("npserver_unused",s));
+			npunused = new Connection(p.getProperty("npserver_unused",s.split(":")[0]+(npserver.port-1)));
 		} catch (UnknownHostException e) {
 			try {
 				npserver = new Connection("127.0.0.1:"+DEFAULT_PORT);
@@ -289,7 +289,7 @@ public class Comm {
 					data.put(DATA_BYTE);
 					data.position(2);
 					
-					for (Entry<Byte,Usage> entry:uses.entrySet()) {
+					for (Entry<Byte,? extends Usage> entry:uses.entrySet()) {
 						data.put(entry.getKey());
 						entry.getValue().pollData(data);
 					}
@@ -454,6 +454,7 @@ public class Comm {
 				if (temp != null) {
 					long time = b.getLong();
 					temp.reset(time,synchTime);
+					temp.activate();
 					contacts.put(c, temp);
 					
 					ByteBuffer reply = makeBuffer();
@@ -508,7 +509,7 @@ public class Comm {
 			}
 			
 			if (doEvent) 
-				uses.get(e.usage).doEvent(e);
+				uses.get(e.usage).doEvent(con,e);
 		}
 		
 		private List<Event> bufferOfResolvedEvents = new ArrayList<Event>(Byte.SIZE);
@@ -539,7 +540,7 @@ public class Comm {
 			while (b.hasRemaining() && (usage = b.get()) != 0x0) {
 				Usage use = uses.get(usage);
 				if (use != null) {
-					use.doData(b);
+					use.doData(con,b);
 				} else {
 					b.position((b.getShort() & 0xffff)+b.position());
 				}
@@ -548,7 +549,8 @@ public class Comm {
 		
 		private void serverRequest(ByteBuffer b, Connection c) { 
 			//sure why not let the app run as a server, don't actually know what will happen in this case
-			ByteBuffer temp = makeBuffer().putLong(System.currentTimeMillis() + synchTime);
+			ByteBuffer temp = makeBuffer().put(SERVER_REPLY_BYTE);
+			temp.putLong(System.currentTimeMillis() + synchTime);
 			c.toBytes(temp);
 			temp.flip();
 			send(temp,c);

@@ -49,8 +49,8 @@ public class PeerPanel extends JPanel {
 		DEFAULT_PIC = temp;
 	}
 	
-	public static ImageIcon loadImage(Connection c, int p) throws IOException {
-		return p==0 ? DEFAULT_PIC : new ImageIcon(ImageIO.read(new File("data/" + c==null?"user":c.toString() + "pic" + p + ".png")));
+	public static ImageIcon loadImage(Connection c) throws IOException {
+		return new ImageIcon(ImageIO.read(new File("data/" + c==null?"user":c.toString() + "pic.png")));
 	}
 	
 	protected JLabel jpic;
@@ -91,6 +91,8 @@ public class PeerPanel extends JPanel {
 		add(jaddress,gbc);
 		
 		setMaximumSize(this.getPreferredSize());
+		revalidate();
+		repaint();
 	}
 	
 	public void makeActivePanel(ImageIcon pic, String name, Connection conn) {
@@ -119,7 +121,7 @@ public class PeerPanel extends JPanel {
 		gbc.gridheight = 1;
 		add(jping,gbc);
         
-		jname = new JLabel(name);
+		jname = new JLabel(name!=null?name:conn.toString());
 		jname.setFont(jname.getFont().deriveFont(Font.BOLD,12));
 		gbc.gridx = 0;
 		gbc.gridy = 2;
@@ -136,6 +138,8 @@ public class PeerPanel extends JPanel {
 		add(jaddress,gbc);
 		
 		setMaximumSize(this.getPreferredSize());
+		revalidate();
+		repaint();
 	}
 	
 	public void makeLostPanel(String name, Connection conn) {
@@ -168,7 +172,7 @@ public class PeerPanel extends JPanel {
         
         jping = null;
         
-		jname = new JLabel(name);
+		jname = new JLabel(name!=null?name:conn!=null?conn.toString():"unknown");
 		jname.setFont(jname.getFont().deriveFont(Font.BOLD,12));
 		gbc.gridx = 0;
 		gbc.gridy = 1;
@@ -185,6 +189,8 @@ public class PeerPanel extends JPanel {
 		add(jaddress,gbc);
 		
 		setMaximumSize(this.getPreferredSize());
+		revalidate();
+		repaint();
 	}
 	
 	public void makePendingPanel(Connection conn) {
@@ -234,6 +240,8 @@ public class PeerPanel extends JPanel {
 		add(jaddress,gbc);
 		
 		setMaximumSize(this.getPreferredSize());
+		revalidate();
+		repaint();
 	}
 	
 	public void setName(final String s) {
