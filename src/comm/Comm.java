@@ -35,7 +35,6 @@ public class Comm {
 	public final boolean DUMP_PACKETS;
 	private final DatagramSocket SOCKET;
 	
-	private volatile int synchTime;
 	private Thread syncher;
 	
 	private final ContactControl source;
@@ -88,9 +87,9 @@ public class Comm {
 		Connection npserver;
 		Connection npunused;
 		try {
-			String s = p.getProperty("npserver","127.0.0.1:"+DEFAULT_PORT);
+			String s = p.getProperty("server","127.0.0.1:"+DEFAULT_PORT);
 			npserver = new Connection(s);
-			npunused = new Connection(p.getProperty("npserver_unused",s.split(":")[0]+(npserver.port-1)));
+			npunused = new Connection(p.getProperty("server_unused",s.split(":")[0]+":" + (npserver.port-1)));
 		} catch (UnknownHostException e) {
 			try {
 				npserver = new Connection("127.0.0.1:"+DEFAULT_PORT);
@@ -215,23 +214,8 @@ public class Comm {
 	}
 	
 	public void sendEvent(Event e, Contact c) {
-		e.time = c.time();
-		e.buffer.put(EVENT_BYTE).putInt(e.time);
-		e.buffer.rewind();
-		if (c.setEvent(e)) {
-			send(e.buffer,c.connection);
-		}
-	}
-	
-	public void sendEvents(Event[] evs, Contact c) {
-		int temp = c.time();
-		for (Event e:evs) {
-			e.buffer.put(EVENT_BYTE).putInt(temp++);
-			e.buffer.rewind();
-			if (c.setEvent(e)) {
-				send(e.buffer,c.connection);
-			}
-		}
+		c.setEvent(e);
+		send(e.buffer,c.connection);
 	}
 	
 	private static void dump(String m, byte[] bs, int len) {
@@ -270,7 +254,7 @@ public class Comm {
 					for (Contact c : contacts.values()) {
 						synchronized (c) {
 							if (c.isActive()) {
-								if (c.touchedLast() > TIME_OUT_DELAY)
+								if (c.tick())
 									c.lose();
 								else
 									foreverAlone = false;
@@ -321,14 +305,8 @@ public class Comm {
 			contacts.put(c.connection,c);
 		}
 		
-		long time = System.currentTimeMillis() + synchTime;
-		long oldTime = c.getTimeOrigin();
-		if (oldTime < time)
-			time = oldTime;
-		
 		final ByteBuffer reply = makeBuffer();
 		reply.put(JOIN_BYTE);
-		reply.putLong(time);
 		reply.flip();
 		
 		Thread temp = new Thread() {
@@ -408,14 +386,8 @@ public class Comm {
 		        Connection c = new Connection(packet);
 		        byte head = buffer.get();
 		        
-		        if (DUMP_PACKETS) {
-		        	byte[] temp = buffer.array();
-		        	int len = buffer.limit();
-		        	while (len > 0  && temp[len-1] == 0) {
-		        		len--;
-		        	}
-					dump("Recieved from " + c.toString(), temp, len);
-		        }
+		        if (DUMP_PACKETS)
+					dump("Recieved from " + c.toString(), buffer.array(), packet.getLength());
 		        
 		        switch (head) {
 		        	case JOIN_BYTE: join(buffer,c); continue;
@@ -434,38 +406,34 @@ public class Comm {
 			synchronized (contacts) {
 				sender = contacts.get(c);
 			
-				if (sender != null) {
-					long time = b.getLong();
-					synchronized (sender) {
-						long oldTime = sender.getTimeOrigin();
-						if (oldTime < time)
-							time = oldTime;
-						sender.reset(time,synchTime);
-						sender.activate();
+				if (sender == null) {
+					Contact temp = source.makeContact(c, b);
+					if (temp != null) {
+						temp.reset();
+						temp.activate();
+						contacts.put(c, temp);
+						
+						ByteBuffer reply = makeBuffer();
+						reply.put(JOIN_ACK_TRUE_BYTE).flip();
+						send(reply,c);
+					} else {
+						ByteBuffer reply = makeBuffer();
+						reply.put(JOIN_ACK_FALSE_BYTE).flip();
+						send(reply,c);
 					}
-					
-					ByteBuffer reply = makeBuffer();
-					reply.put(JOIN_ACK_TRUE_BYTE).putLong(time).flip();
-					send(reply,c);
 					return;
 				}
-				
-				Contact temp = source.makeContact(c, b);
-				if (temp != null) {
-					long time = b.getLong();
-					temp.reset(time,synchTime);
-					temp.activate();
-					contacts.put(c, temp);
-					
-					ByteBuffer reply = makeBuffer();
-					reply.put(JOIN_ACK_TRUE_BYTE).putLong(time).flip();
-					send(reply,c);
-				} else {
-					ByteBuffer reply = makeBuffer();
-					reply.put(JOIN_ACK_FALSE_BYTE).flip();
-					send(reply,c);
-				}
 			}
+			
+			synchronized (sender) {
+				sender.reset();
+				sender.activate();
+			}
+			
+			ByteBuffer reply = makeBuffer();
+			reply.put(JOIN_ACK_TRUE_BYTE).flip();
+			send(reply,c);
+			
 		}
 		
 		private void joinAckTrue(ByteBuffer b, Connection c) {
@@ -477,11 +445,7 @@ public class Comm {
 				con = contacts.get(c);
 			}
 			synchronized (con) {
-				long time = b.getLong();
-				long oldTime = con.getTimeOrigin();
-				if (oldTime < time)
-					time = oldTime;
-				con.reset(time,synchTime);
+				con.reset();
 				con.activate();
 			}
 		}
@@ -491,7 +455,6 @@ public class Comm {
 				joiners.get(c).interrupt();
 			}
 		}
-		
 		
 		private void event(ByteBuffer b, Connection c) {
 			Contact con;
@@ -526,7 +489,7 @@ public class Comm {
 			synchronized (con) {
 				if (!con.isActive())
 					con.activate();
-				con.touch();
+				con.resetTicks();
 				
 				con.resolveEvents(bufferOfResolvedEvents,b.get());
 			}
@@ -550,7 +513,7 @@ public class Comm {
 		private void serverRequest(ByteBuffer b, Connection c) { 
 			//sure why not let the app run as a server, don't actually know what will happen in this case
 			ByteBuffer temp = makeBuffer().put(SERVER_REPLY_BYTE);
-			temp.putLong(System.currentTimeMillis() + synchTime);
+			temp.putLong(System.currentTimeMillis());
 			c.toBytes(temp);
 			temp.flip();
 			send(temp,c);
@@ -558,7 +521,6 @@ public class Comm {
 		
 		private void serverReply(ByteBuffer b, Connection c) {
 			try {
-				synchTime = (int)(b.getLong()-System.currentTimeMillis());
 				synchronized (joiners) {
 					if (syncher != null) {
 						syncher.interrupt();
@@ -566,6 +528,7 @@ public class Comm {
 					}
 				}
 				
+				b.position(b.position()+8);
 				Connection i = new Connection(b);
 				
 				source.setOwnerConnection(i);

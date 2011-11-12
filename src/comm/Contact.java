@@ -8,21 +8,23 @@ public abstract class Contact {
 
 	public final Connection connection;
 	
-	private byte eventMask;
+	private byte eventMaskR;
+	
+	private byte eventMaskS;
+	private int nextEventBit;
 	private final Event[] events;
 	
-	private int lastTouched;
-	private long timeOrigin;
-	private int synchTime;
+	private int ticks;
 	private boolean active = false;
 	
 	public Contact(Connection c) {
 		connection = c;
 		events = new Event[Byte.SIZE];
-		eventMask = 0;
+		nextEventBit = 0;
+		eventMaskS = 0;
+		eventMaskR = 0;
 		Arrays.fill(events, new Event());
-		timeOrigin = Long.MAX_VALUE;
-		lastTouched = 0;
+		ticks = 0;
 	}
 	
 	public abstract void status(String s);
@@ -40,77 +42,46 @@ public abstract class Contact {
 		active = false;
 	}
 	
-	public synchronized int touchedLast() {
-		return time() - lastTouched;
+	public synchronized boolean tick() {
+		return ticks++ > 4;
 	}
 	
-	public synchronized void touch() {
-		lastTouched = time();
+	public synchronized void resetTicks() {
+		ticks = 0;
 	}
 	
-	public synchronized int time() {
-		return (int)(System.currentTimeMillis() + synchTime - timeOrigin);
-	}
-	
-	public synchronized long getTimeOrigin() {
-		return timeOrigin;
-	}
-	
-	public synchronized void reset(long time, int synch) {
-		eventMask = 0;
+	public synchronized void reset() {
+		nextEventBit = 0;
+		eventMaskS = 0;
+		eventMaskR = 0;
 		Arrays.fill(events, new Event());
-		timeOrigin = time;
-		synchTime = synch;
-		lastTouched = 0;
+		resetTicks();
 	}
 	
-	public synchronized byte getEventMask() {
-		return eventMask;
-	}
-	
-	public synchronized boolean setEvent(Event e) {
-		int min = 0;
-		for (int t=1; t<events.length; t++) { //we can start at t=1 without checking because events must contain 8 indices
-			if (events[t].time == e.time && events[t].usage == e.usage)
-				return false;
-			if (events[t].time < events[min].time)
-				min = t;
-		}
-		if (events[min].time > e.time)
-			return false;
-		
-		events[min] = e;
-		eventMask ^= 0x1 << min;
-		e.setBit(min,eventMask);
-		return true;
-	}
-	
-	public synchronized boolean collideEvent(Event e) {
-		if (e.masked(eventMask) && events[e.bit].time == e.time && events[e.bit].usage == e.usage)
-			return false;
-		
-		if (!e.masked(eventMask)) {
-			if (e.time > events[e.bit].time) {
-				eventMask ^= 0x1 << e.bit;
-				events[e.bit] = e;
-				return true;
-			} else
-				return false;
-		} else if (e.time < events[e.bit].time) {
-			Event temp = events[e.bit];
-			eventMask ^= 0x1 << e.bit;
-			events[e.bit] = e;
-			return setEvent(temp);
-		} else {
-			return setEvent(e);
-		}
+	public synchronized void setEvent(Event e) {
+		eventMaskS ^= (0x1 << nextEventBit);
+		e.setBit(nextEventBit, eventMaskS);
+		events[nextEventBit] = e;
+		nextEventBit = ++nextEventBit % Byte.SIZE;
 	}
 	
 	public synchronized void resolveEvents(List<Event> l, byte mask) {
-		mask ^= eventMask;
+		mask ^= eventMaskS;
 		for (int t=0; mask != 0; mask >>>= 0x1,t++) {
     		if ((mask & 0x1) != 0)
     			l.add(events[t]);
     	}
+	}
+	
+	public boolean collideEvent(Event e) {
+		if (!e.masked(eventMaskR)) {
+			eventMaskR ^= (0x1 << e.bit);
+			return true;
+		}
+		return false;
+	}
+	
+	public synchronized byte getEventMask() {
+		return eventMaskR;
 	}
 }

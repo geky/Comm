@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -114,6 +115,10 @@ public class Epyks extends JFrame implements ContactControl {
         } catch (IOException e) {
 			System.err.println("IOException reading config!");
 		}
+        
+         
+        for (Enumeration<?> enu = props.propertyNames(); enu.hasMoreElements();)
+        	System.out.println(enu.nextElement());
         
         settings = new Settings();
         
