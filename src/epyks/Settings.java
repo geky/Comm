@@ -19,11 +19,11 @@ import javax.swing.SwingUtilities;
 import comm.Connection;
 import comm.Event;
 
-public class User extends Plugin {
+public class Settings extends Plugin {
 
 	public final PeerPanel peer;
 	
-	public User() {
+	public Settings() {
 		setName("Settings");
 		
 		try {

@@ -537,7 +537,12 @@ public class Comm {
 			
 			byte usage;
 			while (b.hasRemaining() && (usage = b.get()) != 0x0) {
-				uses.get(usage).doData(b);
+				Usage use = uses.get(usage);
+				if (use != null) {
+					use.doData(b);
+				} else {
+					b.position((b.getShort() & 0xffff)+b.position());
+				}
 			}
 		}
 		

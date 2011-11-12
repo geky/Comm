@@ -11,6 +11,7 @@ import java.awt.event.ActionListener;
 import java.awt.image.BufferedImage;
 import java.io.BufferedOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -31,6 +32,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Scanner;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -78,21 +80,22 @@ public class Epyks extends JFrame {
 		javax.swing.SwingUtilities.invokeLater(
 			new Runnable() {
 				public void run() {
-					current = new Epyks();	            
+					new Epyks();	            
 				}
 			}
 		);
 	}
 	
-	private static JPanel peersPanel;
-	private static JPanel pendingPeersPanel;
-	
-	private final Plugin[] plugins; 
-	
 	public Epyks() {
 		super("Epyks");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         
+        Properties props = new Properties();
+        try {
+        	props.load(new FileInputStream("data/config"));
+        } catch (FileNotFoundException fe) {
+        	System.err.println("No config file!");
+        }
         
         Plugin[] tempPlugs;
         try {
