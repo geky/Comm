@@ -280,37 +280,50 @@ public class Comm {
 		}
 	}
 	
-	public void add(Contact c) {
+	public void add(Contact c, ByteBuffer data) {
 		c.status("resolving...");
 		c.lose();
 		synchronized (contacts) {
 			contacts.put(c.connection,c);
 		}
 		
-		join(c);
+		join(c,data);
 	}
 	
-	public void join(final Contact c) {
-		final ByteBuffer reply = makeBuffer();
-		reply.put(JOIN_BYTE);
-		reply.flip();
-		
+	public void join(final Contact c, final ByteBuffer data) {
 		Thread temp = new Thread() {
 			public void run() {	
-				String attempt = "joining....";
-				
-				for (int t=0; t<4; t++) {
-					c.status(attempt.substring(0, attempt.length()-3+t));
-					send(reply,c.connection);
-					try {
+				try {
+					ByteBuffer reply = makeBuffer();
+					reply.put(JOIN_BYTE);
+					if (data != null)
+						reply.put(data);
+					reply.flip();
+					c.status("joining...");
+					
+					for (int t=0; t<4; t++) {
+						send(reply,c.connection);
 						Thread.sleep(TIME_DELAY);
-					} catch (InterruptedException e) {
-						break;
 					}
-				}
-				
-				synchronized (joiners) {
-					joiners.remove(c.connection);
+					
+					reply.clear();
+					reply.put(NAT_WORKAROUND_REQUEST_BYTE);
+					c.connection.toBytes(reply);
+					reply.position(reply.position() + 6);
+					if (data != null)
+						reply.put(data);
+					reply.flip();
+					c.status("trying workaround...");
+					
+					for (int t=0; t<4; t++) {
+						send(reply,NPSERVER);
+						Thread.sleep(TIME_DELAY);
+					}
+				} catch (InterruptedException e) {
+				} finally {
+					synchronized (joiners) {
+						joiners.remove(c.connection);
+					}
 				}
 			}
 		};

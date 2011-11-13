@@ -356,7 +356,7 @@ public class Epyks extends JFrame implements ContactControl {
 				}
 			}
 			
-			comm.add(p);
+			comm.add(p,null);
 		}
 	}
 	
@@ -374,7 +374,7 @@ public class Epyks extends JFrame implements ContactControl {
 			}
 			
 			if (p != null)
-				comm.join(p);
+				comm.join(p,null);
 		}
 	}
 	
@@ -401,7 +401,7 @@ public class Epyks extends JFrame implements ContactControl {
 			}
 			
 			if (p != null) {
-				comm.add(p);
+				comm.add(p,null);
 			}
 		}
 	}

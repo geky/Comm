@@ -54,9 +54,10 @@ public class Connection {
 		return new DatagramPacket(b.array(),b.limit(),address,port);
 	}
 	
-	public void toBytes(ByteBuffer b) {
+	public ByteBuffer toBytes(ByteBuffer b) {
 		b.put(address.getAddress());
 		b.putShort((short)port);
+		return b;
 	}
 	
 	public String toString() {
