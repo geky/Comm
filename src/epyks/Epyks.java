@@ -199,6 +199,10 @@ public class Epyks extends JFrame implements ContactControl {
 			System.err.println("Failed to greate Sockets");
 		}
         comm.start();
+        
+        for (Plugin p:plugins.values()) {
+        	p.setComm(comm);
+        }
 	}
 	
 	private class Settings extends Plugin {		
@@ -281,6 +285,9 @@ public class Epyks extends JFrame implements ContactControl {
 				e.printStackTrace();
 			}
 		}
+
+		@Override
+		public void setComm(Comm c) {}
 	}
 
 	@Override
@@ -291,9 +298,17 @@ public class Epyks extends JFrame implements ContactControl {
 				return ret;
 			
 			if (!pendingPeers.containsKey(c)) {
-				PeerPanel pending = new PeerPanel(this);
+				final PeerPanel pending = new PeerPanel(this);
 				pending.makePendingPanel(c);
 				pendingPeers.put(c,pending);
+				
+				SwingUtilities.invokeLater(new Runnable() {
+						public void run() {
+							pendingPeersPanel.add(pending);
+							pendingPeersPanel.revalidate();
+							pendingPeersPanel.repaint();
+						}
+					});
 			}
 			return null;
 		}
@@ -306,7 +321,7 @@ public class Epyks extends JFrame implements ContactControl {
 
 	@Override
 	public void error(String s) {
-		user.message(s, Color.BLACK);
+		user.message(s, Color.RED);
 	}
 
 	@Override
@@ -357,7 +372,7 @@ public class Epyks extends JFrame implements ContactControl {
 			
 			Peer p;
 			try {
-				Connection to = new Connection(ip);
+				Connection to = new Connection(ip,comm.DEFAULT_PORT);
 				p = new Peer(to,Epyks.this);
 			} catch (UnknownHostException e) {
 				System.err.println("Bad Address");
@@ -365,10 +380,13 @@ public class Epyks extends JFrame implements ContactControl {
 			}
 			
 			synchronized (peers) {
-				if (peers.put(p.connection, p) != null) {
+				if (peers.put(p.connection, p) == null) {
 					peersPanel.add(p.panel);
 					peersPanel.revalidate();
 					peersPanel.repaint();
+				} else {
+					System.err.println("Duplicate Contact");
+					return;
 				}
 			}
 			
@@ -416,8 +434,9 @@ public class Epyks extends JFrame implements ContactControl {
 				peersPanel.repaint();
 			}
 			
-			if (p != null)
-				comm.join(p);
+			if (p != null) {
+				comm.add(p);
+			}
 		}
 	}
 }

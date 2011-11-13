@@ -162,50 +162,11 @@ public class Comm {
 		return new Event(usage, BUFFER_SIZE);
 	}
 	
-//	private class Joiner extends Thread {
-//		Connection c;
-//		ByteBuffer b;
-//		
-//		public Joiner(Connection tc, ByteBuffer tb) {
-//			c = tc;
-//			b = tb;
-//		}
-//		
-//		public void run() {		
-//			c.resolve();
-//			
-//			for (int t=0; t<4; t++) {
-//				send(b,c);
-//				try {
-//					Thread.sleep(TIME_DELAY);
-//				} catch (InterruptedException e) {
-//					return;
-//				}
-//			}
-//		}
-//	}
-	
-	
-	
-//	public void send(ByteBuffer b) {
-//		DatagramPacket dp = new DatagramPacket(b.array(),b.limit(),null,DEFAULT_PORT);
-//		
-//		if (DUMP_PACKETS)
-//			dump("Sent to all Peers", b.array(), b.limit());
-//		
-//		synchronized (contacts) {
-//			for (Map.Entry<Connection,Contact> p : contacts.entrySet()) {
-//				if (p.getValue().isActive()) {
-//					p.getKey().setDestination(dp);
-//					try {
-//						SOCKET.send(dp);
-//					} catch (IOException e) {
-//						e.printStackTrace();
-//					}
-//				}
-//			}
-//		}
-//	}
+	public void send(ByteBuffer b) {
+		for (Connection c:contacts.keySet()) {
+			send(b,c);
+		}
+	}
 	
 	public void send(ByteBuffer b,Contact c) {
 		send(b,c.connection);
@@ -221,6 +182,12 @@ public class Comm {
 			SOCKET.send(dp);
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+	}
+	
+	public void sendEvent(Event e) {
+		for (Contact c:contacts.values()) {
+			sendEvent(new Event(e),c);
 		}
 	}
 	
@@ -285,7 +252,6 @@ public class Comm {
 					data.position(2);
 					
 					for (Entry<Byte,? extends Usage> entry:uses.entrySet()) {
-						data.put(entry.getKey());
 						entry.getValue().pollData(data);
 					}
 					if (data.hasRemaining())
@@ -330,7 +296,7 @@ public class Comm {
 				String attempt = "joining....";
 				
 				for (int t=0; t<4; t++) {
-					source.status(attempt.substring(0, attempt.length()-3+t));
+					c.status(attempt.substring(0, attempt.length()-3+t));
 					send(reply,c.connection);
 					try {
 						Thread.sleep(TIME_DELAY);
@@ -355,36 +321,15 @@ public class Comm {
 		}
 	}
 	
-//	private class Joiner extends Thread {
-//		Connection c;
-//		ByteBuffer b;
-//		
-//		public Joiner(Connection tc, ByteBuffer tb) {
-//			c = tc;
-//			b = tb;
-//		}
-//		
-//		@Override
-//		public void run() {		
-//			c.resolve();
-//			
-//			for (int t=0; t<4; t++) {
-//				send(b,c);
-//				try {
-//					Thread.sleep(TIME_DELAY);
-//				} catch (InterruptedException e) {
-//					return;
-//				}
-//			}
-//		}
-//	}
 	
 	public void remove(Contact c) {
 		synchronized (joiners) {
-			joiners.get(c.connection).interrupt();
+			Thread temp = joiners.get(c.connection);
+			if (temp != null)
+				temp.interrupt();
 		}
 		synchronized (contacts) {
-			contacts.remove(c);
+			contacts.remove(c.connection);
 		}
 	}
 	
@@ -403,10 +348,11 @@ public class Comm {
 				}
 		        
 		        Connection c = new Connection(packet);
+		        buffer.limit(packet.getLength());
 		        byte head = buffer.get();
 		        
 		        if (DUMP_PACKETS)
-					dump("Recieved from " + c.toString(), buffer.array(), packet.getLength());
+					dump("Recieved from " + c.toString(), buffer.array(), buffer.limit());
 		        
 		        switch (head) {
 		        	case JOIN_BYTE: join(buffer,c); continue;
@@ -476,6 +422,7 @@ public class Comm {
 		}
 		
 		private void event(ByteBuffer b, Connection c) {
+			
 			Contact con;
 			synchronized (contacts) {
 				con = contacts.get(c);

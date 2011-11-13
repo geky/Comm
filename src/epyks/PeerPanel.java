@@ -66,6 +66,8 @@ public class PeerPanel extends JPanel {
 	}
 	
 	public void makeUserPanel(ImageIcon pic,String name) {		
+		removeAll();
+		
 		GridBagConstraints gbc = new GridBagConstraints();
 		
 		jpic = new JLabel(pic!=null?pic:DEFAULT_PIC);
@@ -99,6 +101,8 @@ public class PeerPanel extends JPanel {
 	}
 	
 	public void makeActivePanel(ImageIcon pic, String name, Connection conn) {
+		removeAll();
+		
 		GridBagConstraints gbc = new GridBagConstraints();
 		
 		jpic = new JLabel(pic!=null?pic:DEFAULT_PIC);
@@ -146,6 +150,8 @@ public class PeerPanel extends JPanel {
 	}
 	
 	public void makeLostPanel(String name, Connection conn) {
+		removeAll();
+		
 		GridBagConstraints gbc = new GridBagConstraints();
 		
 		jpic = new JLabel("Not Connected");
@@ -198,6 +204,8 @@ public class PeerPanel extends JPanel {
 	}
 	
 	public void makePendingPanel(Connection conn) {
+		removeAll();
+		
 		GridBagConstraints gbc = new GridBagConstraints();
 		
 		jpic = new JLabel("Pending");

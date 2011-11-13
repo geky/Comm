@@ -3,6 +3,7 @@ server_unused=76.255.179.114\:11109
 
 buffer_size=512
 default_port=11111
+default_range=10
 
 time_delay=1000
 

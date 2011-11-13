@@ -25,6 +25,15 @@ public class Event implements Comparable {
 		bit = bitval = 0;
 	}
 	
+	public Event(Event e) {
+		buffer = ByteBuffer.allocate(e.buffer.limit());
+		buffer.put(e.buffer);
+		buffer.flip();
+		usage = e.usage;
+		bit = e.bit;
+		bitval = e.bitval;
+	}
+	
 	protected Event(ByteBuffer b) {
 		bit = bitval = b.get();
 		bitval &= 0x1;
@@ -36,7 +45,7 @@ public class Event implements Comparable {
 	protected void setBit(int b, int mask) {
 		bit = (byte)b;
 		bitval = (byte)((mask >>> b) & 0x1);
-		buffer.array()[2] = (byte)(bit<<0x2 & bitval);
+		buffer.array()[1] = (byte)(bit<<0x2 | bitval);
 	}
 	
 	public boolean masked(int m) {
