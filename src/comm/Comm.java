@@ -22,8 +22,10 @@ public class Comm {
 	public static final byte DATA_BYTE = 0x40;
 	public static final byte EVENT_BYTE = 0x50;
 	public static final byte KEEP_OPEN_BYTE = 0x0;
-	public final static byte SERVER_REQUEST_BYTE = 0x70;
-	public final static byte SERVER_REPLY_BYTE = 0x60;
+	public static final byte SERVER_REQUEST_BYTE = 0x70;
+	public static final byte SERVER_REPLY_BYTE = 0x60;
+	public static final byte NAT_WORKAROUND_REQUEST_BYTE = 0x71;
+	public static final byte NAT_WORKAROUND_FORWARD_BYTE = 0x61;
 	
 	public final Connection NPSERVER;
 	public final Connection NPSERVER_UNUSED;
@@ -202,15 +204,17 @@ public class Comm {
 		}
 		System.out.print(m + "\tintent: ");
 		switch (bs[0]) {
-			case JOIN_BYTE: System.out.print("JOIN          "); break;
-			case JOIN_ACK_TRUE_BYTE: System.out.print("JOIN_ACK_TRUE "); break;
-			case JOIN_ACK_FALSE_BYTE: System.out.print("JOIN_ACK_FALSE"); break;
-			case EVENT_BYTE: System.out.print("EVENT         "); break;
-			case DATA_BYTE: System.out.print("DATA          "); break;
-			case SERVER_REQUEST_BYTE: System.out.print("SERVER_REQUEST"); break;
-			case SERVER_REPLY_BYTE: System.out.print("SERVER_REPLY  "); break;
-			case KEEP_OPEN_BYTE: System.out.print("KEEP_OPEN     "); break;
-			default: System.out.print("NO_INTENT     "); break;
+			case JOIN_BYTE: System.out.print("JOIN                 "); break;
+			case JOIN_ACK_TRUE_BYTE: System.out.print("JOIN_ACK_TRUE        "); break;
+			case JOIN_ACK_FALSE_BYTE: System.out.print("JOIN_ACK_FALSE       "); break;
+			case EVENT_BYTE: System.out.print("EVENT                "); break;
+			case DATA_BYTE: System.out.print("DATA                 "); break;
+			case SERVER_REQUEST_BYTE: System.out.print("SERVER_REQUEST       "); break;
+			case SERVER_REPLY_BYTE: System.out.print("SERVER_REPLY         "); break;
+			case KEEP_OPEN_BYTE: System.out.print("KEEP_OPEN            "); break;
+			case NAT_WORKAROUND_REQUEST_BYTE : System.out.print("NAT_WORKAROUND_REQUEST"); break;
+			case NAT_WORKAROUND_FORWARD_BYTE : System.out.print("NAT_WORKAROUND_FORWARD"); break;
+			default: System.out.print("NO_INTENT            "); break;
 		}
 		
 		System.out.print("\ttime: " + System.currentTimeMillis() + "\tdata: [" + (Integer.toHexString((bs[0] & 0xf0) >> 0x4) + Integer.toHexString(bs[0] & 0x0f).toUpperCase()));
@@ -362,6 +366,8 @@ public class Comm {
 		        	case DATA_BYTE: data(buffer,c); continue;
 		        	case SERVER_REQUEST_BYTE: serverRequest(buffer,c); continue;
 		        	case SERVER_REPLY_BYTE: serverReply(buffer,c); continue;
+		        	case NAT_WORKAROUND_REQUEST_BYTE: natWorkaroundRequest(buffer, c); continue;
+		        	case NAT_WORKAROUND_FORWARD_BYTE: natWorkaroundForward(buffer, c); continue;
 		        }
 			}
 		}
@@ -479,7 +485,6 @@ public class Comm {
 		private void serverRequest(ByteBuffer b, Connection c) { 
 			//sure why not let the app run as a server, don't actually know what will happen in this case
 			ByteBuffer temp = makeBuffer().put(SERVER_REPLY_BYTE);
-			temp.putLong(System.currentTimeMillis());
 			c.toBytes(temp);
 			temp.flip();
 			send(temp,c);
@@ -493,8 +498,7 @@ public class Comm {
 						syncher = null;
 					}
 				}
-				
-				b.position(b.position()+8);
+
 				Connection i = new Connection(b);
 				
 				source.setOwnerConnection(i);
@@ -502,6 +506,27 @@ public class Comm {
 				source.error("Unusable IP?");
 				e.printStackTrace();
 			}
+		}
+		
+		private void natWorkaroundRequest(ByteBuffer b, Connection c) {
+			//once again running as a server, it really shouldn't be used like this though
+			try {
+				c = new Connection(b);
+			} catch (UnknownHostException e) {
+				return;
+			}
+			ByteBuffer forward = makeBuffer().put(NAT_WORKAROUND_FORWARD_BYTE);
+			forward.put(b);
+			send(b,c);
+		}
+		
+		private void natWorkaroundForward(ByteBuffer b, Connection c) {
+			try {
+				c = new Connection(b);
+			} catch (UnknownHostException e) {
+				return;
+			}
+			join(b,c);
 		}
 	}
 }
