@@ -70,8 +70,6 @@ import comm.Event;
 
 import epyks.plugins.MessagePlugin;
 
-import net.miginfocom.swing.MigLayout;
-
 
 
 public class Epyks extends JFrame implements ContactControl {

@@ -32,8 +32,6 @@ import javax.swing.SwingUtilities;
 import comm.Connection;
 import comm.Contact;
 
-import net.miginfocom.swing.MigLayout;
-
 public class PeerPanel extends JPanel {
 	
 	public static final ImageIcon DEFAULT_PIC;
