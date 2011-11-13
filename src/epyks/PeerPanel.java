@@ -53,13 +53,16 @@ public class PeerPanel extends JPanel {
 		return new ImageIcon(ImageIO.read(new File("data/" + c==null?"user":c.toString() + "pic.png")));
 	}
 	
-	protected JLabel jpic;
-	protected JLabel jname;
-	protected JLabel jaddress;
-	protected JLabel jping;
+	private JLabel jpic;
+	private JLabel jname;
+	private JLabel jaddress;
+	private JLabel jping;
 	
-	public PeerPanel() {
+	private final Epyks source;
+	
+	public PeerPanel(Epyks e) {
 		super(new GridBagLayout());
+		source = e;
 	}
 	
 	public void makeUserPanel(ImageIcon pic,String name) {		
@@ -107,7 +110,7 @@ public class PeerPanel extends JPanel {
 		
 		JButton jexit = new JButton("x");
         jexit.setMargin(new Insets(0,4,0,3));
-        //jexit.addActionListener(new Exit());
+        jexit.addActionListener(source.new Remover(conn));
         gbc.gridx = 1;
 		gbc.gridy = 0;
 		gbc.gridwidth = 1;
@@ -155,6 +158,7 @@ public class PeerPanel extends JPanel {
 		
 		JButton jretry = new JButton("\u21BB");
 		jretry.setMargin(new Insets(0,4,0,3));
+		jretry.addActionListener(source.new Retry(conn));
         gbc.gridx = 1;
 		gbc.gridy = 0;
 		gbc.gridwidth = 1;
@@ -163,7 +167,7 @@ public class PeerPanel extends JPanel {
 		
 		JButton jexit = new JButton("x");
         jexit.setMargin(new Insets(0,4,0,3));
-        //jexit.addActionListener(new Exit());
+        jexit.addActionListener(source.new Remover(conn));
         gbc.gridx = 2;
 		gbc.gridy = 0;
 		gbc.gridwidth = 1;
@@ -172,7 +176,7 @@ public class PeerPanel extends JPanel {
         
         jping = null;
         
-		jname = new JLabel(name!=null?name:conn!=null?conn.toString():"unknown");
+		jname = new JLabel(name!=null?name:conn.toString());
 		jname.setFont(jname.getFont().deriveFont(Font.BOLD,12));
 		gbc.gridx = 0;
 		gbc.gridy = 1;
@@ -180,7 +184,7 @@ public class PeerPanel extends JPanel {
 		gbc.gridheight = 1;
 		add(jname,gbc);
 		
-		jaddress = new JLabel(conn!=null?conn.toString():"...");
+		jaddress = new JLabel(conn.toString());
 		jaddress.setFont(jaddress.getFont().deriveFont(10f));
 		gbc.gridx = 0;
 		gbc.gridy = 2;
@@ -206,6 +210,7 @@ public class PeerPanel extends JPanel {
 		
 		JButton jaccept = new JButton("\u2713");
         jaccept.setMargin(new Insets(0,4,0,3));
+        jaccept.addActionListener(source.new Accept(conn));
         gbc.gridx = 1;
 		gbc.gridy = 0;
 		gbc.gridwidth = 1;
@@ -214,7 +219,7 @@ public class PeerPanel extends JPanel {
 		
         JButton jexit = new JButton("x");
         jexit.setMargin(new Insets(0,4,0,3));
-        //jexit.addActionListener(new Exit());
+        jexit.addActionListener(source.new Remover(conn));
         gbc.gridx = 2;
 		gbc.gridy = 0;
 		gbc.gridwidth = 1;

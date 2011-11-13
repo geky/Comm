@@ -146,6 +146,7 @@ public class Comm {
 								continue;
 							}
 						}
+						syncher = null;
 					}
 				}
 			};
@@ -344,11 +345,12 @@ public class Comm {
 			}
 		};
 		
+		
 		synchronized (joiners) {
 			Thread old = joiners.put(c.connection,temp);
 			if (old != null)
 				old.interrupt();
-			if (syncher != null)
+			if (syncher == null)
 				temp.start();
 		}
 	}

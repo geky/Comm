@@ -18,10 +18,10 @@ public class Peer extends Contact {
 	private String name;
 	private ImageIcon pic;
 	
-	public Peer(Connection c) {
+	public Peer(Connection c, Epyks e) {
 		super(c);
-		panel = new PeerPanel();
-		panel.makeLostPanel(null, null);
+		panel = new PeerPanel(e);
+		panel.makeLostPanel(null, c);
 	}
 
 	@Override

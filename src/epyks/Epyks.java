@@ -235,7 +235,7 @@ public class Epyks extends JFrame implements ContactControl {
 				pic = null;
 			}
 			
-			user = new PeerPanel();
+			user = new PeerPanel(Epyks.this);
 			user.makeUserPanel(pic, name);
 		}
 		
@@ -291,7 +291,7 @@ public class Epyks extends JFrame implements ContactControl {
 				return ret;
 			
 			if (!pendingPeers.containsKey(c)) {
-				PeerPanel pending = new PeerPanel();
+				PeerPanel pending = new PeerPanel(this);
 				pending.makePendingPanel(c);
 				pendingPeers.put(c,pending);
 			}
@@ -358,22 +358,21 @@ public class Epyks extends JFrame implements ContactControl {
 			Peer p;
 			try {
 				Connection to = new Connection(ip);
-				p = new Peer(to);
+				p = new Peer(to,Epyks.this);
 			} catch (UnknownHostException e) {
-				p = new Peer(null);
-				p.error("Bad Address");
+				System.err.println("Bad Address");
+				return;
 			}
 			
 			synchronized (peers) {
-				if (p.connection == null || peers.put(p.connection, p) != null) {
+				if (peers.put(p.connection, p) != null) {
 					peersPanel.add(p.panel);
 					peersPanel.revalidate();
 					peersPanel.repaint();
 				}
 			}
 			
-			if (p.connection != null)
-				comm.add(p);
+			comm.add(p);
 		}
 	}
 	
@@ -403,7 +402,7 @@ public class Epyks extends JFrame implements ContactControl {
 		}
 		
 		public void actionPerformed(ActionEvent arg0) {
-			Peer p = new Peer(owner);
+			Peer p = new Peer(owner,Epyks.this);
 			
 			synchronized (peers) {
 				PeerPanel temp = pendingPeers.remove(owner);
