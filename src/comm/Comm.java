@@ -124,21 +124,19 @@ public class Comm {
 				public void run() {					
 					String attempt = "synching....";
 					
-					for (int t=0; t<4; t++) {
-						source.status(attempt.substring(0, attempt.length()-3+t));
-						send(request,NPSERVER);
-						try {
+					try {
+						for (int t=0; t<4; t++) {
+							source.status(attempt.substring(0, attempt.length()-3+t));
+							send(request,NPSERVER);
+							
 							Thread.sleep(TIME_DELAY);
-						} catch (InterruptedException e) {
-							break;
 						}
-					}
+						source.error("Could not find server");
+					} catch (InterruptedException e) {}
 					
 					try{
 						toRun.start();
-					} catch (IllegalStateException e) {
-						
-					}
+					} catch (IllegalStateException e) {}
 					
 					synchronized (joiners) {
 						for (Thread t:joiners.values()) {
@@ -152,6 +150,7 @@ public class Comm {
 					}
 				}
 			};
+			
 			syncher.start();
 		}
 	}
@@ -309,7 +308,6 @@ public class Comm {
 					reply.clear();
 					reply.put(NAT_WORKAROUND_REQUEST_BYTE);
 					c.connection.toBytes(reply);
-					reply.position(reply.position() + 6);
 					if (data != null)
 						reply.put(data);
 					reply.flip();
@@ -523,14 +521,15 @@ public class Comm {
 		
 		private void natWorkaroundRequest(ByteBuffer b, Connection c) {
 			//once again running as a server, it really shouldn't be used like this though
+			Connection target;
 			try {
-				c = new Connection(b);
+				target = new Connection(b);
 			} catch (UnknownHostException e) {
 				return;
 			}
 			ByteBuffer forward = makeBuffer().put(NAT_WORKAROUND_FORWARD_BYTE);
-			forward.put(b);
-			send(b,c);
+			c.toBytes(forward).put(b).flip();
+			send(forward,target);
 		}
 		
 		private void natWorkaroundForward(ByteBuffer b, Connection c) {

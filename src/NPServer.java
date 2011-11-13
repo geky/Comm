@@ -86,10 +86,12 @@ public class NPServer extends Thread {
 				} catch (UnknownHostException e1) {
 					return;
 				}
-				int port = buffer.getShort();
+				int port = buffer.getShort() & 0xffff;
 				
 				ByteBuffer rBuffer = ByteBuffer.allocate(buffer.limit());
 				rBuffer.put(NAT_WORKAROUND_FORWARD_BYTE);
+				rBuffer.put(hit.getAddress().getAddress());
+				rBuffer.putShort((short)hit.getPort());
 				rBuffer.put(buffer);
 				rBuffer.flip();
 				
