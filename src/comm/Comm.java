@@ -35,6 +35,8 @@ public class Comm {
 	private final DatagramSocket SOCKET;
 	
 	private Thread syncher;
+	private final Thread sender;
+	private final Thread reciever;
 	
 	private final ContactControl source;
 	private final Map<Connection,Contact> contacts = new HashMap<Connection,Contact>();
@@ -98,16 +100,18 @@ public class Comm {
 		}
 		NPSERVER = npserver;
 		NPSERVER_UNUSED = npunused;
+		
+		sender = new Sender();
+		reciever = new Reciever();
 	}
 	
 	public void start() {
 		if (NPSERVER != null)
-			synch();
-		new Sender().start();
-		new Reciever().start();
+			synch(sender);
+		reciever.start();
 	}
 	
-	public void synch() {
+	private void synch(final Thread toRun) {
 		source.status("resolving...");
 		
 		final ByteBuffer request = makeBuffer();
@@ -124,13 +128,23 @@ public class Comm {
 						try {
 							Thread.sleep(TIME_DELAY);
 						} catch (InterruptedException e) {
-							return;
+							break;
 						}
+					}
+					
+					try{
+						toRun.start();
+					} catch (IllegalStateException e) {
+						
 					}
 					
 					synchronized (joiners) {
 						for (Thread t:joiners.values()) {
-							t.start();
+							try{
+								t.start();
+							} catch (IllegalStateException e) {
+								continue;
+							}
 						}
 					}
 				}
@@ -295,13 +309,17 @@ public class Comm {
 		}
 	}
 	
-	public void add(final Contact c) {
+	public void add(Contact c) {
 		c.status("resolving...");
 		c.lose();
 		synchronized (contacts) {
 			contacts.put(c.connection,c);
 		}
 		
+		join(c);
+	}
+	
+	public void join(final Contact c) {
 		final ByteBuffer reply = makeBuffer();
 		reply.put(JOIN_BYTE);
 		reply.flip();
@@ -316,14 +334,20 @@ public class Comm {
 					try {
 						Thread.sleep(TIME_DELAY);
 					} catch (InterruptedException e) {
-						return;
+						break;
 					}
+				}
+				
+				synchronized (joiners) {
+					joiners.remove(c.connection);
 				}
 			}
 		};
 		
 		synchronized (joiners) {
-			joiners.put(c.connection,temp);
+			Thread old = joiners.put(c.connection,temp);
+			if (old != null)
+				old.interrupt();
 			if (syncher != null)
 				temp.start();
 		}

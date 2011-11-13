@@ -116,10 +116,6 @@ public class Epyks extends JFrame implements ContactControl {
 			System.err.println("IOException reading config!");
 		}
         
-         
-        for (Enumeration<?> enu = props.propertyNames(); enu.hasMoreElements();)
-        	System.out.println(enu.nextElement());
-        
         settings = new Settings();
         
         
@@ -160,16 +156,13 @@ public class Epyks extends JFrame implements ContactControl {
         JTextField jaddfield = new JTextField(10);
         JButton jaddplus = new JButton("+");
         jaddplus.setMargin(new Insets(0,3,0,3));
-        JTextField jaddmsg = new JTextField(10);
-//        ActionListener add = new Joiner(jaddfield,jaddmsg);
-//        jaddplus.addActionListener(add);
-//        jaddfield.addActionListener(add);
-//        jaddmsg.addActionListener(add);
+        ActionListener add = new Adder(jaddfield);
+        jaddplus.addActionListener(add);
+        jaddfield.addActionListener(add);
         
         JPanel jadd = new JPanel(new BorderLayout(0,2));
         jadd.add(jaddfield,BorderLayout.CENTER);
         jadd.add(jaddplus,BorderLayout.EAST);
-        jadd.add(jaddmsg,BorderLayout.SOUTH);
         jadd.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
         
         peers = new HashMap<Connection,Peer>();
@@ -319,5 +312,113 @@ public class Epyks extends JFrame implements ContactControl {
 	@Override
 	public void setOwnerConnection(Connection c) {
 		settings.setConnection(c);
+	}
+	
+	public class Remover implements ActionListener {
+		Connection owner;
+		
+		public Remover(Connection c) {
+			owner = c;
+		}
+		
+		public void actionPerformed(ActionEvent arg0) {
+			Peer peer;
+			synchronized (peers) {
+				peer = peers.remove(owner);
+				if (peer != null) {
+					peersPanel.remove(peer.panel);
+					peersPanel.revalidate();
+					peersPanel.repaint();
+				} else {
+					PeerPanel pending = pendingPeers.remove(owner);
+					if (pending != null) {
+						pendingPeersPanel.remove(pending);
+						pendingPeersPanel.revalidate();
+						pendingPeersPanel.repaint();
+					}
+					return;
+				}
+			}
+			
+			comm.remove(peer);
+		}
+	}
+	
+	public class Adder implements ActionListener {
+		JTextField source;
+		
+		public Adder(JTextField s) {
+			source = s;
+		}
+		
+		public void actionPerformed(ActionEvent arg0) {
+			String ip = source.getText();
+			source.setText("");
+			
+			Peer p;
+			try {
+				Connection to = new Connection(ip);
+				p = new Peer(to);
+			} catch (UnknownHostException e) {
+				p = new Peer(null);
+				p.error("Bad Address");
+			}
+			
+			synchronized (peers) {
+				if (p.connection == null || peers.put(p.connection, p) != null) {
+					peersPanel.add(p.panel);
+					peersPanel.revalidate();
+					peersPanel.repaint();
+				}
+			}
+			
+			if (p.connection != null)
+				comm.add(p);
+		}
+	}
+	
+	public class Retry implements ActionListener {
+		Connection owner;
+		
+		public Retry(Connection c) {
+			owner = c;
+		}
+		
+		public void actionPerformed(ActionEvent arg0) {
+			Peer p;
+			synchronized (peers) {
+				p = peers.get(owner);
+			}
+			
+			if (p != null)
+				comm.join(p);
+		}
+	}
+	
+	public class Accept implements ActionListener {
+		Connection owner;
+		
+		public Accept(Connection c) {
+			owner = c;
+		}
+		
+		public void actionPerformed(ActionEvent arg0) {
+			Peer p = new Peer(owner);
+			
+			synchronized (peers) {
+				PeerPanel temp = pendingPeers.remove(owner);
+				pendingPeersPanel.remove(temp);
+				pendingPeersPanel.revalidate();
+				pendingPeersPanel.repaint();
+				
+				peers.put(owner, p);
+				peersPanel.add(p.panel);
+				peersPanel.revalidate();
+				peersPanel.repaint();
+			}
+			
+			if (p != null)
+				comm.join(p);
+		}
 	}
 }
