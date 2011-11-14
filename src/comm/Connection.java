@@ -13,7 +13,7 @@ public class Connection {
 		byte[] temp = new byte[4];
 		b.get(temp);
 		address = InetAddress.getByAddress(temp);
-		port = b.getShort();
+		port = b.getShort() & 0xffff;
 	}
 	
 	public Connection(InetAddress a, int p) {
@@ -61,7 +61,7 @@ public class Connection {
 	}
 	
 	public String toString() {
-		return address.getHostAddress() + ':' + (port&0xffff);
+		return address.getHostAddress() + ':' + port;
 	}
 	
 	public int hashCode() {
