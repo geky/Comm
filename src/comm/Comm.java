@@ -314,7 +314,7 @@ public class Comm {
 					reply.flip();
 									
 					for (int t=0; t<4; t++) {
-						source.status(attempt.substring(0, attempt.length()-3+t));
+						c.status(attempt.substring(0, attempt.length()-3+t));
 						send(reply,c.connection);
 						Thread.sleep(JOIN_TIME_DELAY);
 					}
@@ -329,13 +329,15 @@ public class Comm {
 					reply.flip();
 					
 					for (int t=0; t<4; t++) {
-						source.status(attempt.substring(0, attempt.length()-3+t));
+						c.status(attempt.substring(0, attempt.length()-3+t));
 						send(reply,NPSERVER);
 						Thread.sleep(JOIN_TIME_DELAY);
 					}
+					
+					c.status("waiting...");
+					
 				} catch (InterruptedException e) {
 				} finally {
-					c.status("waiting...");
 					synchronized (joiners) {
 						joiners.remove(c.connection);
 					}
