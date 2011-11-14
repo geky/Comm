@@ -28,12 +28,16 @@ public class Comm {
 	public static final byte NAT_WORKAROUND_FORWARD_BYTE = 0x61;
 	
 	public final Connection NPSERVER;
-	public final Connection NPSERVER_UNUSED;
+	public final Connection NPSERVER_KEEP_OPEN;
 	
 	public final int BUFFER_SIZE;
-	public final int TIME_DELAY;
 	public final int DEFAULT_PORT;
 	public final boolean DUMP_PACKETS;
+	
+	public final int DATA_TIME_DELAY;
+	public final int JOIN_TIME_DELAY;
+	public final int SERVER_TIME_DELAY;
+	
 	private final DatagramSocket SOCKET;
 	
 	private Thread syncher;
@@ -52,8 +56,11 @@ public class Comm {
 		uses = Collections.unmodifiableMap(u);
 		
 		BUFFER_SIZE = Integer.parseInt(p.getProperty("buffer_size","512"));
-		TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
 		DUMP_PACKETS = Boolean.parseBoolean(p.getProperty("dump_packets", "false"));
+		
+		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
+		DATA_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY/2));
+		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY*8));
 		
 		String port = p.getProperty("default_port");
 		String portRange = p.getProperty("default_range");
@@ -91,7 +98,7 @@ public class Comm {
 		try {
 			String s = p.getProperty("server","127.0.0.1:"+DEFAULT_PORT);
 			npserver = new Connection(s);
-			npunused = new Connection(p.getProperty("server_unused",s.split(":")[0]+":" + (npserver.port-1)));
+			npunused = new Connection(p.getProperty("server_keep_open",s.split(":")[0]+":" + (npserver.port-1)));
 		} catch (UnknownHostException e) {
 			try {
 				npserver = new Connection("127.0.0.1:"+DEFAULT_PORT);
@@ -101,7 +108,7 @@ public class Comm {
 			}
 		}
 		NPSERVER = npserver;
-		NPSERVER_UNUSED = npunused;
+		NPSERVER_KEEP_OPEN = npunused;
 		
 		sender = new Sender();
 		reciever = new Reciever();
@@ -129,7 +136,7 @@ public class Comm {
 							source.status(attempt.substring(0, attempt.length()-3+t));
 							send(request,NPSERVER);
 							
-							Thread.sleep(TIME_DELAY);
+							Thread.sleep(JOIN_TIME_DELAY);
 						}
 						source.error("Could not find server");
 					} catch (InterruptedException e) {}
@@ -226,9 +233,19 @@ public class Comm {
 	
 	public class Sender extends Thread {
 		
+		private int ticks = 0;
+		
 		@Override
 		public void run() {
 			while (true) {
+				
+				ticks = ++ticks % (SERVER_TIME_DELAY/DATA_TIME_DELAY); 
+				if (ticks == 0) {
+					ByteBuffer data = makeBuffer();
+					data.put(KEEP_OPEN_BYTE);
+					data.flip();
+					send(data,NPSERVER_KEEP_OPEN);
+				}
 				
 				boolean foreverAlone = true;
 				synchronized (contacts) {
@@ -244,12 +261,7 @@ public class Comm {
 					}
 				}
 				
-				if (foreverAlone) {
-					ByteBuffer data = makeBuffer();
-					data.put(KEEP_OPEN_BYTE);
-					data.flip();
-					send(data,NPSERVER_UNUSED);
-				} else {
+				if (!foreverAlone) {
 					ByteBuffer data = makeBuffer();
 					data.put(DATA_BYTE);
 					data.position(2);
@@ -271,7 +283,7 @@ public class Comm {
 				}
 				
 				try {
-					sleep(TIME_DELAY);
+					sleep(DATA_TIME_DELAY);
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
@@ -293,17 +305,21 @@ public class Comm {
 		Thread temp = new Thread() {
 			public void run() {	
 				try {
+					String attempt = "joining....";
+					
 					ByteBuffer reply = makeBuffer();
 					reply.put(JOIN_BYTE);
 					if (data != null)
 						reply.put(data);
 					reply.flip();
-					c.status("joining...");
-					
+									
 					for (int t=0; t<4; t++) {
+						source.status(attempt.substring(0, attempt.length()-3+t));
 						send(reply,c.connection);
-						Thread.sleep(TIME_DELAY);
+						Thread.sleep(JOIN_TIME_DELAY);
 					}
+					
+					attempt = "trying workaround....";
 					
 					reply.clear();
 					reply.put(NAT_WORKAROUND_REQUEST_BYTE);
@@ -311,14 +327,15 @@ public class Comm {
 					if (data != null)
 						reply.put(data);
 					reply.flip();
-					c.status("trying workaround...");
 					
 					for (int t=0; t<4; t++) {
+						source.status(attempt.substring(0, attempt.length()-3+t));
 						send(reply,NPSERVER);
-						Thread.sleep(TIME_DELAY);
+						Thread.sleep(JOIN_TIME_DELAY);
 					}
 				} catch (InterruptedException e) {
 				} finally {
+					c.status("waiting...");
 					synchronized (joiners) {
 						joiners.remove(c.connection);
 					}
@@ -328,11 +345,12 @@ public class Comm {
 		
 		
 		synchronized (joiners) {
-			Thread old = joiners.put(c.connection,temp);
-			if (old != null)
-				old.interrupt();
-			if (syncher == null)
-				temp.start();
+			if (!joiners.containsKey(c.connection)) {
+				joiners.put(c.connection,temp);
+				
+				if (syncher == null)
+					temp.start();
+			}
 		}
 	}
 	

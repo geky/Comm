@@ -1,10 +1,21 @@
+#User settings
+
+name=User
+pic=0
+
+
+#Application Settings
+#Don't change these unless you know what you are doing
+
 server=76.255.179.114\:11110
-server_unused=76.255.179.114\:11109
+server_keep_open=76.255.179.114\:11109
 
 buffer_size=512
 default_port=11111
 default_range=10
 
-time_delay=1000
+data_time_delay=500
+join_time_delay=1000
+server_time_delay=8000
 
 dump_packets=true
