@@ -64,6 +64,10 @@ public class Connection {
 		return address.getHostAddress() + ':' + port;
 	}
 	
+	public String toString(int defaultport) {
+		return address.getHostAddress() + (port!=defaultport?':' + port:"");
+	}
+	
 	public int hashCode() {
 		return address.hashCode();
 	}

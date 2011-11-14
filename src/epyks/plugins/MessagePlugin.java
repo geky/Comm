@@ -57,6 +57,7 @@ public class MessagePlugin extends Plugin implements ActionListener {
 		to.buffer.put(field.getText().getBytes());
 		to.buffer.flip();
 		comm.sendEvent(to);
+		
 		area.append("me : " + field.getText() + "\n");
 		field.setText("");
 	}

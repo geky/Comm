@@ -59,7 +59,7 @@ public class Comm {
 		DUMP_PACKETS = Boolean.parseBoolean(p.getProperty("dump_packets", "false"));
 		
 		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
-		DATA_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY/2));
+		DATA_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY));
 		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY*8));
 		
 		String port = p.getProperty("default_port");
@@ -171,8 +171,10 @@ public class Comm {
 	}
 	
 	public void send(ByteBuffer b) {
-		for (Connection c:contacts.keySet()) {
-			send(b,c);
+		synchronized (contacts) {
+			for (Connection c:contacts.keySet()) {
+				send(b,c);
+			}
 		}
 	}
 	
@@ -194,8 +196,10 @@ public class Comm {
 	}
 	
 	public void sendEvent(Event e) {
-		for (Contact c:contacts.values()) {
-			sendEvent(new Event(e),c);
+		synchronized (contacts) {
+			for (Contact c:contacts.values()) {
+				sendEvent(new Event(e),c);
+			}
 		}
 	}
 	
@@ -205,25 +209,25 @@ public class Comm {
 	}
 	
 	private static void dump(String m, byte[] bs, int len) {
-		while (m.length() < 28) {
-			m += "   ";
-		}
+
 		System.out.print(m + "\tintent: ");
-		switch (bs[0]) {
-			case JOIN_BYTE: System.out.print("JOIN                 "); break;
-			case JOIN_ACK_TRUE_BYTE: System.out.print("JOIN_ACK_TRUE        "); break;
-			case JOIN_ACK_FALSE_BYTE: System.out.print("JOIN_ACK_FALSE       "); break;
-			case EVENT_BYTE: System.out.print("EVENT                "); break;
-			case DATA_BYTE: System.out.print("DATA                 "); break;
-			case SERVER_REQUEST_BYTE: System.out.print("SERVER_REQUEST       "); break;
-			case SERVER_REPLY_BYTE: System.out.print("SERVER_REPLY         "); break;
-			case KEEP_OPEN_BYTE: System.out.print("KEEP_OPEN            "); break;
+		switch (len>0?bs[0]:-1) {
+			case JOIN_BYTE: System.out.print("JOIN"); break;
+			case JOIN_ACK_TRUE_BYTE: System.out.print("JOIN_ACK_TRUE"); break;
+			case JOIN_ACK_FALSE_BYTE: System.out.print("JOIN_ACK_FALSE"); break;
+			case EVENT_BYTE: System.out.print("EVENT"); break;
+			case DATA_BYTE: System.out.print("DATA"); break;
+			case SERVER_REQUEST_BYTE: System.out.print("SERVER_REQUEST"); break;
+			case SERVER_REPLY_BYTE: System.out.print("SERVER_REPLY"); break;
+			case KEEP_OPEN_BYTE: System.out.print("KEEP_OPEN"); break;
 			case NAT_WORKAROUND_REQUEST_BYTE : System.out.print("NAT_WORKAROUND_REQUEST"); break;
 			case NAT_WORKAROUND_FORWARD_BYTE : System.out.print("NAT_WORKAROUND_FORWARD"); break;
-			default: System.out.print("NO_INTENT            "); break;
+			default: System.out.print("NO_INTENT"); break;
 		}
 		
-		System.out.print("\ttime: " + System.currentTimeMillis() + "\tdata: [" + (Integer.toHexString((bs[0] & 0xf0) >> 0x4) + Integer.toHexString(bs[0] & 0x0f).toUpperCase()));
+		System.out.print("\ttime: " + System.currentTimeMillis());
+		System.out.print("\tsize: " + len + " ");
+		System.out.print("\tdata: [" + (len<=0?"":(Integer.toHexString((bs[0] & 0xf0) >> 0x4) + Integer.toHexString(bs[0] & 0x0f).toUpperCase())));
 		
 		for (int t=1; t<len; t++) {
 			System.out.print((" " + Integer.toHexString((bs[t] & 0xf0) >> 0x4) + Integer.toHexString(bs[t] & 0x0f)).toUpperCase());
@@ -334,7 +338,7 @@ public class Comm {
 						Thread.sleep(JOIN_TIME_DELAY);
 					}
 					
-					c.status("waiting...");
+					c.status("no response");
 					
 				} catch (InterruptedException e) {
 				} finally {
@@ -373,39 +377,39 @@ public class Comm {
 		@Override
 		public void run() {
 			while (true) {
-				ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
-				DatagramPacket packet = new DatagramPacket(buffer.array(), BUFFER_SIZE);
-		        try {
-					SOCKET.receive(packet);
-				} catch (IOException e) {
+				try {
+					ByteBuffer buffer = ByteBuffer.allocate(BUFFER_SIZE);
+					DatagramPacket packet = new DatagramPacket(buffer.array(), BUFFER_SIZE);
+			        try {
+						SOCKET.receive(packet);
+					} catch (IOException e) {
+						e.printStackTrace();
+						continue;
+					}
+			        
+			        Connection c = new Connection(packet);
+			        buffer.limit(packet.getLength());
+			        byte head = buffer.get();
+			        
+			        if (DUMP_PACKETS)
+						dump("Recieved from " + c.toString(), buffer.array(), buffer.limit());
+			        
+			        switch (head) {
+			        	case JOIN_BYTE: join(buffer,c); continue;
+			        	case JOIN_ACK_TRUE_BYTE: joinAckTrue(buffer, c); continue;
+			        	case JOIN_ACK_FALSE_BYTE: joinAckFalse(buffer, c); continue;
+			        	case EVENT_BYTE: event(buffer,c); continue;
+			        	case DATA_BYTE: data(buffer,c); continue;
+			        	case SERVER_REQUEST_BYTE: serverRequest(buffer,c); continue;
+			        	case SERVER_REPLY_BYTE: serverReply(buffer,c); continue;
+			        	case NAT_WORKAROUND_REQUEST_BYTE: natWorkaroundRequest(buffer, c); continue;
+			        	case NAT_WORKAROUND_FORWARD_BYTE: natWorkaroundForward(buffer, c); continue;
+			        }
+				} catch (Exception e) {
+					//This is generally bad programming practice
+					//but for this program we want it to try to function even if a part of it fails
 					e.printStackTrace();
-					continue;
 				}
-		        
-		        if (packet.getLength() < 1) {
-		        	System.err.println("WHAT");
-		        	//trying to debug this atm
-		        	continue;
-		        }
-		        
-		        Connection c = new Connection(packet);
-		        buffer.limit(packet.getLength());
-		        byte head = buffer.get();
-		        
-		        if (DUMP_PACKETS)
-					dump("Recieved from " + c.toString(), buffer.array(), buffer.limit());
-		        
-		        switch (head) {
-		        	case JOIN_BYTE: join(buffer,c); continue;
-		        	case JOIN_ACK_TRUE_BYTE: joinAckTrue(buffer, c); continue;
-		        	case JOIN_ACK_FALSE_BYTE: joinAckFalse(buffer, c); continue;
-		        	case EVENT_BYTE: event(buffer,c); continue;
-		        	case DATA_BYTE: data(buffer,c); continue;
-		        	case SERVER_REQUEST_BYTE: serverRequest(buffer,c); continue;
-		        	case SERVER_REPLY_BYTE: serverReply(buffer,c); continue;
-		        	case NAT_WORKAROUND_REQUEST_BYTE: natWorkaroundRequest(buffer, c); continue;
-		        	case NAT_WORKAROUND_FORWARD_BYTE: natWorkaroundForward(buffer, c); continue;
-		        }
 			}
 		}
 		
@@ -459,8 +463,15 @@ public class Comm {
 		}
 		
 		private void joinAckFalse(ByteBuffer b, Connection c) {
+			Contact con;
 			synchronized (joiners) {
 				joiners.get(c).interrupt();
+			}
+			synchronized (contacts) {
+				con = contacts.get(c);
+			}
+			synchronized (con) {
+				con.status("waiting...");
 			}
 		}
 		

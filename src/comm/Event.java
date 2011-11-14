@@ -7,7 +7,7 @@ import epyks.Epyks;
 
 public class Event implements Comparable {
 
-	public ByteBuffer buffer;
+	public final ByteBuffer buffer;
 	public byte usage; //changes to these variables may or may not be reflected in the byte buffer
 	public byte bit;
 	public byte bitval;
@@ -26,9 +26,12 @@ public class Event implements Comparable {
 	}
 	
 	public Event(Event e) {
+		e.buffer.mark();
 		buffer = ByteBuffer.allocate(e.buffer.limit());
 		buffer.put(e.buffer);
 		buffer.flip();
+		e.buffer.reset();
+		
 		usage = e.usage;
 		bit = e.bit;
 		bitval = e.bitval;
