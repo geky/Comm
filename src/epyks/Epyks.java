@@ -145,7 +145,7 @@ public class Epyks extends JFrame implements ContactControl {
         
         JScrollPane jscp = new JScrollPane(peersHolder,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         
-        user.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createEmptyBorder(4,4,4,4), BorderFactory.createLineBorder(Color.GRAY,1,false)));
+        user.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createEmptyBorder(4,4,4,4), BorderFactory.createLineBorder(Color.GRAY)));
         
         jscp.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createEmptyBorder(0,4,0,4), jscp.getBorder()));
         jscp.setPreferredSize(new Dimension(130,200));
