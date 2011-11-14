@@ -346,13 +346,14 @@ public class Epyks extends JFrame implements ContactControl {
 			}
 			
 			synchronized (peers) {
-				if (peers.put(p.connection, p) == null) {
+				if (peers.containsKey(p.connection)) {
+					System.err.println("Duplicate Contact");
+					return;
+				} else {
+					peers.put(p.connection, p);
 					peersPanel.add(p.panel);
 					peersPanel.revalidate();
 					peersPanel.repaint();
-				} else {
-					System.err.println("Duplicate Contact");
-					return;
 				}
 			}
 			
