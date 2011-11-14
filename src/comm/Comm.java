@@ -362,6 +362,12 @@ public class Comm {
 					continue;
 				}
 		        
+		        if (packet.getLength() < 1) {
+		        	System.err.println("WHAT");
+		        	//trying to debug this atm
+		        	continue;
+		        }
+		        
 		        Connection c = new Connection(packet);
 		        buffer.limit(packet.getLength());
 		        byte head = buffer.get();
