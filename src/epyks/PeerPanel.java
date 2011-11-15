@@ -1,6 +1,7 @@
 package epyks;
 
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
@@ -23,6 +24,8 @@ import java.nio.ByteBuffer;
 
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -54,46 +57,50 @@ public class PeerPanel extends JPanel {
 	private JLabel jpic;
 	private JLabel jname;
 	private JLabel jaddress;
-	private JLabel jping;
 	
 	private final Epyks source;
 	
 	public PeerPanel(Epyks e) {
-		super(new GridBagLayout());
+		super();
+		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+		setBorder(BorderFactory.createEmptyBorder(4,4,4,4));
+		setAlignmentX(Component.LEFT_ALIGNMENT);
+		
 		source = e;
 	}
 	
 	public void makeUserPanel(ImageIcon pic,String name) {		
 		removeAll();
-		
-		GridBagConstraints gbc = new GridBagConstraints();
+				
+		JPanel layer = new JPanel();
+		layer.setLayout(new BoxLayout(layer,BoxLayout.X_AXIS));
+        layer.setAlignmentX(LEFT_ALIGNMENT);
 		
 		jpic = new JLabel(pic!=null?pic:DEFAULT_PIC);
-		gbc.gridx = 0;
-		gbc.gridy = 0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 1;
-		add(jpic,gbc);
+		jpic.setAlignmentY(TOP_ALIGNMENT);
+		layer.add(jpic);
+		
+		layer.add(Box.createHorizontalGlue());
 
-		jping = null;
+		JButton jretry = new JButton("\u21BB");
+		jretry.setMargin(new Insets(0,2,0,3));
+		jretry.addActionListener(source.new Resynch());
+		jretry.setAlignmentY(TOP_ALIGNMENT);
+        layer.add(jretry);
+        
+        add(layer);
         
 		jname = new JLabel(name!=null?name:"Username");
 		jname.setFont(jname.getFont().deriveFont(Font.BOLD,12));
-		gbc.gridx = 0;
-		gbc.gridy = 1;
-		gbc.gridwidth = 2;
-		gbc.gridheight = 1;
-		add(jname,gbc);
+		jname.setAlignmentX(LEFT_ALIGNMENT);
+		add(jname);
 		
 		jaddress = new JLabel("initializing...");
 		jaddress.setFont(jaddress.getFont().deriveFont(10f));
-		gbc.gridx = 0;
-		gbc.gridy = 2;
-		gbc.gridwidth = 2;
-		gbc.gridheight = 1;
-		add(jaddress,gbc);
+		jaddress.setAlignmentX(LEFT_ALIGNMENT);
+		add(jaddress);
 		
-		setMaximumSize(this.getPreferredSize());
+		setMaximumSize(new Dimension(Integer.MAX_VALUE,getPreferredSize().height));
 		revalidate();
 		repaint();
 	}
@@ -101,48 +108,35 @@ public class PeerPanel extends JPanel {
 	public void makeActivePanel(ImageIcon pic, String name, Connection conn) {
 		removeAll();
 		
-		GridBagConstraints gbc = new GridBagConstraints();
+		JPanel layer = new JPanel();
+		layer.setLayout(new BoxLayout(layer,BoxLayout.X_AXIS));
+		layer.setAlignmentX(LEFT_ALIGNMENT);
 		
 		jpic = new JLabel(pic!=null?pic:DEFAULT_PIC);
-		gbc.gridx = 0;
-		gbc.gridy = 0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 2;
-		add(jpic,gbc);
+		jpic.setAlignmentY(TOP_ALIGNMENT);
+		layer.add(jpic);
+		
+		layer.add(Box.createHorizontalGlue());
 		
 		JButton jexit = new JButton("x");
         jexit.setMargin(new Insets(0,4,0,3));
         jexit.addActionListener(source.new Remover(conn));
-        gbc.gridx = 1;
-		gbc.gridy = 0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 1;
-        add(jexit,gbc);
-        
-        jping = new JLabel();
-        gbc.gridx = 1;
-		gbc.gridy = 1;
-		gbc.gridwidth = 2;
-		gbc.gridheight = 1;
-		add(jping,gbc);
+        jexit.setAlignmentY(TOP_ALIGNMENT);
+        layer.add(jexit);
+
+        add(layer);
         
 		jname = new JLabel(name!=null?name:conn.toString());
 		jname.setFont(jname.getFont().deriveFont(Font.BOLD,12));
-		gbc.gridx = 0;
-		gbc.gridy = 2;
-		gbc.gridwidth = 2;
-		gbc.gridheight = 1;
-		add(jname,gbc);
+		jname.setAlignmentX(LEFT_ALIGNMENT);
+		add(jname);
 		
 		jaddress = new JLabel(conn.toString());
 		jaddress.setFont(jaddress.getFont().deriveFont(10f));
-		gbc.gridx = 0;
-		gbc.gridy = 3;
-		gbc.gridwidth = 2;
-		gbc.gridheight = 1;
-		add(jaddress,gbc);
+		jaddress.setAlignmentX(LEFT_ALIGNMENT);
+		add(jaddress);
 		
-		setMaximumSize(this.getPreferredSize());
+		setMaximumSize(new Dimension(Integer.MAX_VALUE,getPreferredSize().height));
 		revalidate();
 		repaint();
 	}
@@ -150,107 +144,86 @@ public class PeerPanel extends JPanel {
 	public void makeLostPanel(String name, Connection conn) {
 		removeAll();
 		
-		GridBagConstraints gbc = new GridBagConstraints();
+		JPanel layer = new JPanel();
+		layer.setLayout(new BoxLayout(layer,BoxLayout.X_AXIS));
+		layer.setAlignmentX(LEFT_ALIGNMENT);
 		
-		jpic = new JLabel("Not Connected");
+		jpic = new JLabel("Lost");
 		jpic.setFont(jpic.getFont().deriveFont(Font.BOLD,12));
-		gbc.gridx = 0;
-		gbc.gridy = 0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 1;
-		add(jpic,gbc);
+		jpic.setAlignmentX(TOP_ALIGNMENT);
+		layer.add(jpic);
+		
+		layer.add(Box.createHorizontalGlue());
 		
 		JButton jretry = new JButton("\u21BB");
-		jretry.setMargin(new Insets(0,4,0,3));
+		jretry.setMargin(new Insets(0,2,0,3));
 		jretry.addActionListener(source.new Retry(conn));
-        gbc.gridx = 1;
-		gbc.gridy = 0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 1;
-        add(jretry,gbc);
+		jretry.setAlignmentX(TOP_ALIGNMENT);
+        layer.add(jretry);
 		
 		JButton jexit = new JButton("x");
         jexit.setMargin(new Insets(0,4,0,3));
         jexit.addActionListener(source.new Remover(conn));
-        gbc.gridx = 2;
-		gbc.gridy = 0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 1;
-        add(jexit,gbc);
+        jexit.setAlignmentX(TOP_ALIGNMENT);
+        layer.add(jexit);
         
-        jping = null;
+        add(layer);
         
 		jname = new JLabel(name!=null?name:conn.toString());
 		jname.setFont(jname.getFont().deriveFont(Font.BOLD,12));
-		gbc.gridx = 0;
-		gbc.gridy = 1;
-		gbc.gridwidth = 3;
-		gbc.gridheight = 1;
-		add(jname,gbc);
+		jname.setAlignmentX(LEFT_ALIGNMENT);
+		add(jname);
 		
 		jaddress = new JLabel(conn.toString());
 		jaddress.setFont(jaddress.getFont().deriveFont(10f));
-		gbc.gridx = 0;
-		gbc.gridy = 2;
-		gbc.gridwidth = 3;
-		gbc.gridheight = 1;
-		add(jaddress,gbc);
+		jaddress.setAlignmentX(LEFT_ALIGNMENT);
+		add(jaddress);
 		
-		setMaximumSize(this.getPreferredSize());
+		setMaximumSize(new Dimension(Integer.MAX_VALUE,getPreferredSize().height));
 		revalidate();
 		repaint();
 	}
 	
-	public void makePendingPanel(Connection conn) {
+	public void makePendingPanel(String name, Connection conn) {
 		removeAll();
 		
-		GridBagConstraints gbc = new GridBagConstraints();
+		JPanel layer = new JPanel();
+		layer.setLayout(new BoxLayout(layer,BoxLayout.X_AXIS));
+		layer.setAlignmentX(LEFT_ALIGNMENT);
 		
 		jpic = new JLabel("Pending");
 		jpic.setFont(jpic.getFont().deriveFont(Font.BOLD,12));
-		gbc.gridx = 0;
-		gbc.gridy = 0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 1;
-		add(jpic,gbc);
+		jpic.setAlignmentX(TOP_ALIGNMENT);
+		layer.add(jpic);
+		
+		layer.add(Box.createHorizontalGlue());
 		
 		JButton jaccept = new JButton("\u2713");
         jaccept.setMargin(new Insets(0,4,0,3));
         jaccept.addActionListener(source.new Accept(conn));
-        gbc.gridx = 1;
-		gbc.gridy = 0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 1;
-        add(jaccept,gbc);
+        jaccept.setAlignmentX(TOP_ALIGNMENT);
+        layer.add(jaccept);
 		
         JButton jexit = new JButton("x");
         jexit.setMargin(new Insets(0,4,0,3));
         jexit.addActionListener(source.new Remover(conn));
-        gbc.gridx = 2;
-		gbc.gridy = 0;
-		gbc.gridwidth = 1;
-		gbc.gridheight = 1;
-        add(jexit,gbc);
+        jexit.setAlignmentX(TOP_ALIGNMENT);
+        layer.add(jexit);
         
-        jping = null;
+        add(layer);
         
-		jname = new JLabel("status");
+		jname = new JLabel(name!=null?name:conn.toString());
 		jname.setFont(jname.getFont().deriveFont(Font.BOLD,12));
-		gbc.gridx = 0;
-		gbc.gridy = 1;
-		gbc.gridwidth = 3;
-		gbc.gridheight = 1;
-		add(jname,gbc);
+		jname.setAlignmentX(LEFT_ALIGNMENT);
+		add(jname);
 		
 		jaddress = new JLabel(conn.toString());
 		jaddress.setFont(jaddress.getFont().deriveFont(10f));
-		gbc.gridx = 0;
-		gbc.gridy = 2;
-		gbc.gridwidth = 3;
-		gbc.gridheight = 1;
-		add(jaddress,gbc);
+		jname.setAlignmentX(LEFT_ALIGNMENT);
+		add(jaddress);
 		
-		setMaximumSize(this.getPreferredSize());
+		
+		setMaximumSize(new Dimension(Integer.MAX_VALUE,getPreferredSize().height));
 		revalidate();
 		repaint();
 	}

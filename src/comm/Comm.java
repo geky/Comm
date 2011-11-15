@@ -3,6 +3,7 @@ package comm;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -41,8 +42,6 @@ public class Comm {
 	private final DatagramSocket SOCKET;
 	
 	private Thread syncher;
-	private final Thread sender;
-	private final Thread reciever;
 	
 	private final ContactControl source;
 	private final Map<Connection,Contact> contacts = new HashMap<Connection,Contact>();
@@ -109,51 +108,51 @@ public class Comm {
 		}
 		NPSERVER = npserver;
 		NPSERVER_KEEP_OPEN = npunused;
-		
-		sender = new Sender();
-		reciever = new Reciever();
 	}
 	
 	public void start() {
-		if (NPSERVER != null)
-			synch(sender);
-		reciever.start();
+		synch();
+		new Reciever().start();
+		new Sender().start();
 	}
 	
-	private void synch(final Thread toRun) {
-		source.status("resolving...");
-		
-		final ByteBuffer request = makeBuffer();
-		request.put(SERVER_REQUEST_BYTE).flip();
-		
+	public void synch() {
 		synchronized (joiners) {
+			if (syncher != null)
+				return;
+			
 			syncher = new Thread() {
 				public void run() {					
 					String attempt = "synching....";
 					
 					try {
+						ByteBuffer request = makeBuffer();
+						request.put(SERVER_REQUEST_BYTE).flip();
+						
 						for (int t=0; t<4; t++) {
 							source.status(attempt.substring(0, attempt.length()-3+t));
 							send(request,NPSERVER);
 							
 							Thread.sleep(JOIN_TIME_DELAY);
 						}
-						source.error("Could not find server");
-					} catch (InterruptedException e) {}
 					
-					try{
-						toRun.start();
-					} catch (IllegalStateException e) {}
-					
-					synchronized (joiners) {
-						for (Thread t:joiners.values()) {
-							try{
-								t.start();
-							} catch (IllegalStateException e) {
-								continue;
-							}
+						Connection c;
+						source.status("guessing...");
+						
+						sleep(1000);
+						
+						try {
+							InetAddress me = InetAddress.getLocalHost();
+							c = new Connection(me,SOCKET.getLocalPort());
+							source.setOwnerConnection(c,false);
+						} catch (Exception e) {
+							source.error("Couldn't obtain IP");
 						}
-						syncher = null;
+					} catch (InterruptedException e) {
+					} finally {
+						synchronized (joiners) {
+							syncher = null;
+						}
 					}
 				}
 			};
@@ -323,7 +322,7 @@ public class Comm {
 						Thread.sleep(JOIN_TIME_DELAY);
 					}
 					
-					attempt = "trying workaround....";
+					attempt = "workaround....";
 					
 					reply.clear();
 					reply.put(NAT_WORKAROUND_REQUEST_BYTE);
@@ -353,9 +352,7 @@ public class Comm {
 		synchronized (joiners) {
 			if (!joiners.containsKey(c.connection)) {
 				joiners.put(c.connection,temp);
-				
-				if (syncher == null)
-					temp.start();
+				temp.start();
 			}
 		}
 	}
@@ -543,13 +540,12 @@ public class Comm {
 				synchronized (joiners) {
 					if (syncher != null) {
 						syncher.interrupt();
-						syncher = null;
 					}
 				}
 
 				Connection i = new Connection(b);
 				
-				source.setOwnerConnection(i);
+				source.setOwnerConnection(i,true);
 			} catch (UnknownHostException e) {
 				source.error("Unusable IP?");
 				e.printStackTrace();

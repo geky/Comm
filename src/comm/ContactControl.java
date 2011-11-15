@@ -12,5 +12,5 @@ public interface ContactControl {
 	public void status(String s);
 	public void error(String s);
 	
-	public void setOwnerConnection(Connection c);
+	public void setOwnerConnection(Connection c, boolean checked);
 }

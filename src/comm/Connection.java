@@ -61,11 +61,11 @@ public class Connection {
 	}
 	
 	public String toString() {
-		return address.getHostAddress() + ':' + port;
+		return address.getHostAddress() + ":" + port;
 	}
 	
 	public String toString(int defaultport) {
-		return address.getHostAddress() + (port!=defaultport?':' + port:"");
+		return address.getHostAddress() + (port!=defaultport?":"+port:"");
 	}
 	
 	public int hashCode() {

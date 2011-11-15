@@ -21,6 +21,7 @@ import java.util.Scanner;
 
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
@@ -127,31 +128,34 @@ public class Epyks extends JFrame implements ContactControl {
 		pendingPeers = new HashMap<Connection, PeerPanel>();
 
 		pendingPeersPanel = new JPanel();
-		pendingPeersPanel.setLayout(new BoxLayout(pendingPeersPanel,
-				BoxLayout.Y_AXIS));
+		pendingPeersPanel.setLayout(new BoxLayout(pendingPeersPanel, BoxLayout.Y_AXIS));
 		peersPanel = new JPanel();
 		peersPanel.setLayout(new BoxLayout(peersPanel, BoxLayout.Y_AXIS));
 
-		JPanel peersHolder = new JPanel(new BorderLayout());
-		peersHolder.add(pendingPeersPanel, BorderLayout.NORTH);
-		peersHolder.add(peersPanel, BorderLayout.CENTER);
+		JPanel peersHolder = new JPanel();
+		peersHolder.setLayout(new BoxLayout(peersHolder, BoxLayout.Y_AXIS));
+		peersHolder.add(pendingPeersPanel);
+		peersHolder.add(peersPanel);
 
 		JScrollPane jscp = new JScrollPane(peersHolder,
 				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
 				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
-		user.setBorder(BorderFactory.createCompoundBorder(
-				BorderFactory.createEmptyBorder(4, 4, 4, 4),
-				BorderFactory.createLineBorder(Color.GRAY)));
-
 		jscp.setBorder(BorderFactory.createCompoundBorder(
 				BorderFactory.createEmptyBorder(0, 4, 0, 4), jscp.getBorder()));
 		jscp.setPreferredSize(new Dimension(130, 200));
 
+		JPanel userHolder = new JPanel();
+		userHolder.setLayout(new BoxLayout(userHolder, BoxLayout.X_AXIS));
+		userHolder.add(user);
+		userHolder.setBorder(BorderFactory.createCompoundBorder(
+				BorderFactory.createEmptyBorder(4, 4, 4, 4),
+				BorderFactory.createLineBorder(Color.GRAY)));
+		
 		JPanel jleft = new JPanel(new BorderLayout());
 		jleft.add(jadd, BorderLayout.NORTH);
 		jleft.add(jscp, BorderLayout.CENTER);
-		jleft.add(user, BorderLayout.SOUTH);
+		jleft.add(userHolder, BorderLayout.SOUTH);
 
 		add(new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, jleft, jtp));
 		pack();
@@ -160,7 +164,7 @@ public class Epyks extends JFrame implements ContactControl {
 		try {
 			comm = new Comm(this, plugins, props);
 		} catch (SocketException e) {
-			System.err.println("Failed to greate Sockets");
+			System.err.println("Failed to create Sockets");
 		}
 		comm.start();
 
@@ -235,12 +239,12 @@ public class Epyks extends JFrame implements ContactControl {
 			user.setPic(i);
 		}
 
-		public void setConnection(Connection c) {
+		public void setConnection(Connection c,boolean checked) {
 			synchronized (this) {
 				connection = c;
 			}
 
-			user.message(connection.toString(comm.DEFAULT_PORT), Color.BLACK);
+			user.message((checked?"":"~") + connection.toString(comm.DEFAULT_PORT), Color.BLACK);
 		}
 
 		public synchronized void save() {
@@ -252,8 +256,7 @@ public class Epyks extends JFrame implements ContactControl {
 		}
 
 		@Override
-		public void setComm(Comm c) {
-		}
+		public void setComm(Comm c) {}
 	}
 
 	@Override
@@ -265,7 +268,7 @@ public class Epyks extends JFrame implements ContactControl {
 
 			if (!pendingPeers.containsKey(c)) {
 				final PeerPanel pending = new PeerPanel(this);
-				pending.makePendingPanel(c);
+				pending.makePendingPanel(null,c);
 				pendingPeers.put(c, pending);
 
 				SwingUtilities.invokeLater(new Runnable() {
@@ -291,8 +294,8 @@ public class Epyks extends JFrame implements ContactControl {
 	}
 
 	@Override
-	public void setOwnerConnection(Connection c) {
-		settings.setConnection(c);
+	public void setOwnerConnection(Connection c,boolean checked) {
+		settings.setConnection(c,checked);
 	}
 
 	public class Remover implements ActionListener {
@@ -376,6 +379,12 @@ public class Epyks extends JFrame implements ContactControl {
 
 			if (p != null)
 				comm.join(p, null);
+		}
+	}
+	
+	public class Resynch implements ActionListener {
+		public void actionPerformed(ActionEvent arg0) {
+			comm.synch();
 		}
 	}
 
