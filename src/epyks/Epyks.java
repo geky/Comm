@@ -2,6 +2,7 @@ package epyks;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
@@ -25,7 +26,9 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -64,7 +67,6 @@ public class Epyks extends JFrame implements ContactControl {
 	private Comm comm;
 
 	private Settings settings;
-	private PeerPanel user;
 
 	public Epyks() {
 		super("Epyks");
@@ -79,7 +81,7 @@ public class Epyks extends JFrame implements ContactControl {
 			System.err.println("IOException reading config!");
 		}
 
-		settings = new Settings();
+		settings = new Settings(props);
 
 		Map<Byte, Plugin> plugins = new HashMap<Byte, Plugin>();
 		JTabbedPane jtp = new JTabbedPane();
@@ -98,7 +100,8 @@ public class Epyks extends JFrame implements ContactControl {
 					System.err.println("Could not find plugin " + nextName);
 					continue;
 				}
-
+				
+				//settings.add(next.settings(props));
 				plugins.put(next.usage(), next);
 				jtp.add(next);
 			}
@@ -147,7 +150,7 @@ public class Epyks extends JFrame implements ContactControl {
 
 		JPanel userHolder = new JPanel();
 		userHolder.setLayout(new BoxLayout(userHolder, BoxLayout.X_AXIS));
-		userHolder.add(user);
+		userHolder.add(settings.user);
 		userHolder.setBorder(BorderFactory.createCompoundBorder(
 				BorderFactory.createEmptyBorder(4, 4, 4, 4),
 				BorderFactory.createLineBorder(Color.GRAY)));
@@ -173,91 +176,7 @@ public class Epyks extends JFrame implements ContactControl {
 		}
 	}
 
-	private class Settings extends Plugin {
-		Properties props;
-
-		String name;
-		ImageIcon pic;
-		Connection connection;
-
-		public Settings() {
-			setName("Settings");
-
-			props = new Properties();
-			File settings = new File("data/settings");
-
-			try { // really java?
-				props.load(new FileReader(settings));
-			} catch (FileNotFoundException e) {
-				try {
-					settings.createNewFile();
-				} catch (IOException e1) {
-					e1.printStackTrace();
-				}
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-
-			name = props.getProperty("name");
-			try {
-				String picname = props.getProperty("pic");
-				if (picname != null)
-					pic = new ImageIcon(
-							ImageIO.read(new File("data/" + picname)));
-			} catch (IOException e) {
-				pic = null;
-			}
-
-			user = new PeerPanel(Epyks.this);
-			user.makeUserPanel(pic, name);
-		}
-
-		@Override
-		public synchronized void doEvent(Contact s, Event e) {
-			// TODO Auto-generated method stub
-
-		}
-
-		@Override
-		public byte usage() {
-			return (byte) 0xff;
-		}
-
-		public void setUserName(String n) {
-			synchronized (this) {
-				name = n;
-			}
-
-			user.setName(n);
-		}
-
-		public void setPic(ImageIcon i) {
-			synchronized (this) {
-				pic = i;
-			}
-
-			user.setPic(i);
-		}
-
-		public void setConnection(Connection c,boolean checked) {
-			synchronized (this) {
-				connection = c;
-			}
-
-			user.message((checked?"":"~") + connection.toString(comm.DEFAULT_PORT), Color.BLACK);
-		}
-
-		public synchronized void save() {
-			try {
-				props.store(new FileWriter("data/settings"), null);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-
-		@Override
-		public void setComm(Comm c) {}
-	}
+	
 
 	@Override
 	public Contact makeContact(Connection c, ByteBuffer b) {
@@ -285,12 +204,12 @@ public class Epyks extends JFrame implements ContactControl {
 
 	@Override
 	public void status(String s) {
-		user.message(s, Color.BLACK);
+		settings.user.message(s, Color.BLACK);
 	}
 
 	@Override
 	public void error(String s) {
-		user.message(s, Color.RED);
+		settings.user.message(s, Color.RED);
 	}
 
 	@Override
@@ -412,6 +331,159 @@ public class Epyks extends JFrame implements ContactControl {
 
 			if (p != null) {
 				comm.add(p, null);
+			}
+		}
+	}
+	
+	private class Settings extends Plugin {
+		Properties config;
+
+		PeerPanel user;
+		
+		String name;
+		ImageIcon pic;
+		Connection connection;
+		
+		JPanel mainPanel;
+
+		public Settings(Properties p) {
+			setName("Settings");
+			setLayout(new BorderLayout());
+
+			config = p;
+
+			name = config.getProperty("name");
+			try {
+				String picname = config.getProperty("pic");
+				if (picname != null)
+					pic = new ImageIcon(
+							ImageIO.read(new File("data/" + picname)));
+			} catch (IOException e) {
+				pic = null;
+			}
+
+			user = new PeerPanel(Epyks.this);
+			user.makeUserPanel(pic, name);
+			
+			mainPanel = new JPanel();
+			mainPanel.setLayout(new BoxLayout(mainPanel,BoxLayout.Y_AXIS));
+			mainPanel.setOpaque(false);
+			
+			JPanel layer1 = new JPanel();
+			layer1.setLayout(new BoxLayout(layer1,BoxLayout.X_AXIS));
+			layer1.setOpaque(false);
+			
+			JPanel jpic = new JPanel();
+			jpic.setLayout(new BoxLayout(jpic,BoxLayout.Y_AXIS));
+			jpic.setOpaque(false);
+			
+			JPanel jpiclabelpanel = new JPanel();
+			jpiclabelpanel.setLayout(new BoxLayout(jpiclabelpanel,BoxLayout.X_AXIS));
+			JLabel jpiclabel = new JLabel(" Picture");
+			jpiclabelpanel.add(jpiclabel);
+			jpiclabelpanel.add(Box.createHorizontalGlue());
+			jpiclabelpanel.setOpaque(false);
+			jpiclabelpanel.setAlignmentX(CENTER_ALIGNMENT);
+			
+			jpic.add(jpiclabelpanel);
+			JLabel jpicpic = new JLabel(pic);
+			jpicpic.setAlignmentX(CENTER_ALIGNMENT);
+			jpic.add(jpicpic);
+			JLabel jpichint = new JLabel("(click to edit)");
+			jpichint.setOpaque(false);
+			jpichint.setAlignmentX(CENTER_ALIGNMENT);
+			jpic.add(jpichint);
+			
+			JPanel jname = new JPanel();
+			jname.setLayout(new BoxLayout(jname,BoxLayout.Y_AXIS));
+			jname.setOpaque(false);
+			
+			JLabel jnamelabel = new JLabel(" Name");
+			jnamelabel.setAlignmentX(LEFT_ALIGNMENT);
+			jname.add(jnamelabel);
+			JTextField jnamefield = new JTextField(name);
+			jnamefield.setAlignmentX(LEFT_ALIGNMENT);
+			jnamefield.setMaximumSize(new Dimension(Integer.MAX_VALUE,jnamefield.getPreferredSize().height));
+			jname.add(jnamefield);
+			
+			jpic.setAlignmentY(TOP_ALIGNMENT);
+			layer1.add(jpic);
+			layer1.add(Box.createHorizontalStrut(4));
+			jname.setAlignmentY(TOP_ALIGNMENT);
+			layer1.add(jname);
+			layer1.setBorder(BorderFactory.createEmptyBorder(4,4,4,4));
+			mainPanel.add(layer1);
+			
+			JScrollPane pane = new JScrollPane(mainPanel,JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+			pane.setOpaque(false);
+			pane.getViewport().setOpaque(false);
+			pane.setBorder(null);
+			super.add(pane,BorderLayout.CENTER);
+			
+			JPanel layer2 = new JPanel();
+			layer2.setLayout(new BoxLayout(layer2,BoxLayout.X_AXIS));
+			layer2.setOpaque(false);
+			
+			layer2.add(Box.createHorizontalGlue());
+			JButton save = new JButton("Save");
+			save.setOpaque(false);
+			layer2.add(save);
+			layer2.add(Box.createHorizontalStrut(2));
+			JButton cancel = new JButton("Cancel");
+			cancel.setOpaque(false);
+			layer2.add(cancel);
+			layer2.setBorder(BorderFactory.createEmptyBorder(4,4,4,4));
+			layer2.setMaximumSize(new Dimension(Integer.MAX_VALUE,layer2.getPreferredSize().height));
+			
+			super.add(layer2,BorderLayout.SOUTH);
+		}
+
+		@Override
+		public synchronized void doEvent(Contact s, Event e) {
+			// TODO Auto-generated method stub
+
+		}
+
+		@Override
+		public byte usage() {
+			return (byte) 0xff;
+		}
+
+		public void setUserName(String n) {
+			synchronized (this) {
+				name = n;
+			}
+
+			user.setName(n);
+		}
+
+		public void setPic(ImageIcon i) {
+			synchronized (this) {
+				pic = i;
+			}
+
+			user.setPic(i);
+		}
+
+		public void setConnection(Connection c,boolean checked) {
+			synchronized (this) {
+				connection = c;
+			}
+
+			user.message((checked?"":"~") + connection.toString(comm.DEFAULT_PORT), Color.BLACK);
+		}
+		
+//		public Component add(Component jc) {
+//			if (jc != null)
+//				mainPanel.add(jc);
+//			return jc;
+//		}
+
+		public synchronized void save() {
+			try {
+				config.store(new FileWriter("data/config"), null);
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
 		}
 	}

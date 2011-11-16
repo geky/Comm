@@ -1,8 +1,10 @@
 package epyks;
 
 import java.nio.ByteBuffer;
+import java.util.Properties;
 
 import javax.swing.JComponent;
+import javax.swing.JPanel;
 
 import comm.Comm;
 import comm.Contact;
@@ -17,4 +19,6 @@ public abstract class Plugin extends JComponent implements Usage {
 	public void doData(Contact s, ByteBuffer b) {}
 	
 	public void setComm(Comm c) {}	
+	
+	public JPanel settings(Properties p) {return null;}
 }
