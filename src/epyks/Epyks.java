@@ -101,7 +101,7 @@ public class Epyks extends JFrame implements ContactControl {
 					continue;
 				}
 				
-				//settings.add(next.settings(props));
+				settings.add(next.settings(props));
 				plugins.put(next.usage(), next);
 				jtp.add(next);
 			}
@@ -473,11 +473,11 @@ public class Epyks extends JFrame implements ContactControl {
 			user.message((checked?"":"~") + connection.toString(comm.DEFAULT_PORT), Color.BLACK);
 		}
 		
-//		public Component add(Component jc) {
-//			if (jc != null)
-//				mainPanel.add(jc);
-//			return jc;
-//		}
+		public Component add(Component jc) {
+			if (jc != null)
+				mainPanel.add(jc);
+			return jc;
+		}
 
 		public synchronized void save() {
 			try {
