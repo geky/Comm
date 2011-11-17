@@ -9,6 +9,8 @@ public interface ContactControl {
 	//or returns null if it does not accept the connection
 	public Contact makeContact(Connection c, ByteBuffer b);
 	
+	public void getData(ByteBuffer b);
+	
 	public void status(String s);
 	public void error(String s);
 	

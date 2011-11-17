@@ -10,8 +10,10 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Map.Entry;
 import java.util.Properties;
 
@@ -294,17 +296,17 @@ public class Comm {
 		}
 	}
 	
-	public void add(Contact c, ByteBuffer data) {
+	public void add(Contact c) {
 		c.status("resolving...");
 		c.lose();
 		synchronized (contacts) {
 			contacts.put(c.connection,c);
 		}
 		
-		join(c,data);
+		join(c);
 	}
 	
-	public void join(final Contact c, final ByteBuffer data) {
+	public void join(final Contact c) {
 		Thread temp = new Thread() {
 			public void run() {	
 				try {
@@ -312,8 +314,11 @@ public class Comm {
 					
 					ByteBuffer reply = makeBuffer();
 					reply.put(JOIN_BYTE);
-					if (data != null)
-						reply.put(data);
+					for (byte byt:uses.keySet()) {
+						reply.put(byt);
+					}
+					reply.put((byte)0x0);
+					source.getData(reply);
 					reply.flip();
 									
 					for (int t=0; t<4; t++) {
@@ -327,8 +332,11 @@ public class Comm {
 					reply.clear();
 					reply.put(NAT_WORKAROUND_REQUEST_BYTE);
 					c.connection.toBytes(reply);
-					if (data != null)
-						reply.put(data);
+					for (byte byt:uses.keySet()) {
+						reply.put(byt);
+					}
+					reply.put((byte)0x0);
+					source.getData(reply);
 					reply.flip();
 					
 					for (int t=0; t<4; t++) {
@@ -411,38 +419,68 @@ public class Comm {
 		}
 		
 		private void join(ByteBuffer b, Connection c) {
+			
+			HashSet<Byte> set = new HashSet<Byte>(uses.size());
+			for (byte byt = b.get(); byt != 0x0; byt = b.get()) {
+				if (uses.containsKey(byt))
+					set.add(byt);
+			}
+			
 			Contact sender;
 			synchronized (contacts) {
 				sender = contacts.get(c);
 			
-				if (sender == null) {
-					Contact temp = source.makeContact(c, b);
-					if (temp != null) {
-						temp.reset();
-						temp.activate();
-						contacts.put(c, temp);
-						
-						ByteBuffer reply = makeBuffer();
-						reply.put(JOIN_ACK_TRUE_BYTE).flip();
-						send(reply,c);
-					} else {
-						ByteBuffer reply = makeBuffer();
-						reply.put(JOIN_ACK_FALSE_BYTE).flip();
-						send(reply,c);
+				if (sender != null) {			
+					
+					sender.setData(b);
+					synchronized (sender) {
+						sender.setPlugins(set);
+						sender.reset();
+						sender.activate();
 					}
+					
+					ByteBuffer reply = makeBuffer();
+					reply.put(JOIN_ACK_TRUE_BYTE);
+					for (byte byt:uses.keySet()) {
+						reply.put(byt);
+					}
+					reply.put((byte)0x0);
+					source.getData(reply);
+					reply.flip();
+					send(reply,c);
+					
 					return;
 				}
-			}
-			
-			synchronized (sender) {
-				sender.reset();
-				sender.activate();
-			}
-			
-			ByteBuffer reply = makeBuffer();
-			reply.put(JOIN_ACK_TRUE_BYTE).flip();
-			send(reply,c);
-			
+				
+						
+				Contact temp = source.makeContact(c,b);
+				
+				if (temp == null) {
+					ByteBuffer reply = makeBuffer();
+					reply.put(JOIN_ACK_FALSE_BYTE).flip();
+					send(reply,c);
+					return;
+				}
+				
+				
+				temp.setPlugins(set);
+				
+				temp.reset();
+				temp.activate();
+				contacts.put(c, temp);
+				
+				ByteBuffer reply = makeBuffer();
+				reply.put(JOIN_ACK_TRUE_BYTE);
+				for (byte byt:uses.keySet()) {
+					reply.put(byt);
+				}
+				reply.put((byte)0x0);
+				source.getData(reply);
+				reply.flip();
+				send(reply,c);
+				
+				return;
+			}		
 		}
 		
 		private void joinAckTrue(ByteBuffer b, Connection c) {
@@ -453,7 +491,18 @@ public class Comm {
 			synchronized (contacts) {
 				con = contacts.get(c);
 			}
+			
+			HashSet<Byte> set = new HashSet<Byte>(uses.size());
+			for (byte byt = b.get(); byt != 0x0; byt = b.get()) {
+				if (uses.containsKey(byt))
+					set.add(byt);
+			}
+			
+			con.setData(b);
+			
 			synchronized (con) {
+				con.setPlugins(set);
+				
 				con.reset();
 				con.activate();
 			}

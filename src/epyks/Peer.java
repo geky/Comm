@@ -3,6 +3,7 @@ package epyks;
 import java.awt.Color;
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
@@ -40,7 +41,9 @@ public class Peer extends Contact {
 		SwingUtilities.invokeLater(
 				new Runnable() {
 					public void run() {
-						panel.makeActivePanel(pic,name,connection);
+						synchronized (this) {
+							panel.makeActivePanel(pic,name,connection);
+						}
 					}
 				}
 			);
@@ -52,9 +55,21 @@ public class Peer extends Contact {
 		SwingUtilities.invokeLater(
 				new Runnable() {
 					public void run() {
-						panel.makeLostPanel(name,connection);
+						synchronized (this) {
+							panel.makeLostPanel(name,connection);
+						}
 					}
 				}
 			);
+	}
+
+	@Override
+	public void setData(ByteBuffer b) {
+		byte[] temp = new byte[b.get()];
+		b.get(temp);
+		
+		synchronized (this) {
+			name = new String(temp);
+		}
 	}
 }

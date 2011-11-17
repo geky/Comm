@@ -1,8 +1,11 @@
 package comm;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public abstract class Contact {
 
@@ -17,6 +20,8 @@ public abstract class Contact {
 	private int ticks;
 	private boolean active = false;
 	
+	private Set<Byte> plugins;
+	
 	public Contact(Connection c) {
 		connection = c;
 		events = new Event[Byte.SIZE];
@@ -29,6 +34,16 @@ public abstract class Contact {
 	
 	public abstract void status(String s);
 	public abstract void error(String s);
+	
+	public abstract void setData(ByteBuffer b);
+	
+	public synchronized void setPlugins(Set<Byte> set) {
+		plugins = set;
+	}
+	
+	public synchronized boolean hasPlugin(byte b) {
+		return plugins.contains(b);
+	}
 	
 	public synchronized boolean isActive() {
 		return active;

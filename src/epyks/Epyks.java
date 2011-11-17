@@ -182,12 +182,18 @@ public class Epyks extends JFrame implements ContactControl {
 	public Contact makeContact(Connection c, ByteBuffer b) {
 		synchronized (peers) {
 			Contact ret = peers.get(c);
-			if (ret != null)
+			if (ret != null) {
+				ret.setData(b);
 				return ret;
+			}
 
 			if (!pendingPeers.containsKey(c)) {
+				byte[] temp = new byte[b.get()];
+				b.get(temp);
+				String name = new String(temp);
+				
 				final PeerPanel pending = new PeerPanel(this);
-				pending.makePendingPanel(null,c);
+				pending.makePendingPanel(name,c);
 				pendingPeers.put(c, pending);
 
 				SwingUtilities.invokeLater(new Runnable() {
@@ -200,6 +206,13 @@ public class Epyks extends JFrame implements ContactControl {
 			}
 			return null;
 		}
+	}
+	
+	@Override
+	public void getData(ByteBuffer b) {
+		String name = settings.getUserName();
+		b.put((byte)name.length());
+		b.put(name.getBytes());
 	}
 
 	@Override
@@ -279,7 +292,7 @@ public class Epyks extends JFrame implements ContactControl {
 				}
 			}
 
-			comm.add(p, null);
+			comm.add(p);
 		}
 	}
 
@@ -297,7 +310,7 @@ public class Epyks extends JFrame implements ContactControl {
 			}
 
 			if (p != null)
-				comm.join(p, null);
+				comm.join(p);
 		}
 	}
 	
@@ -330,7 +343,7 @@ public class Epyks extends JFrame implements ContactControl {
 			}
 
 			if (p != null) {
-				comm.add(p, null);
+				comm.add(p);
 			}
 		}
 	}
@@ -456,6 +469,10 @@ public class Epyks extends JFrame implements ContactControl {
 
 			user.setName(n);
 		}
+		
+		public synchronized String getUserName() {
+			return name;
+		}
 
 		public void setPic(ImageIcon i) {
 			synchronized (this) {
@@ -463,6 +480,10 @@ public class Epyks extends JFrame implements ContactControl {
 			}
 
 			user.setPic(i);
+		}
+		
+		public synchronized ImageIcon getPic() {
+			return pic;
 		}
 
 		public void setConnection(Connection c,boolean checked) {
