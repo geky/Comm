@@ -168,7 +168,7 @@ public class Comm {
 	}
 	
 	public Event makeEvent(byte usage) {
-		return new Event(usage, BUFFER_SIZE);
+		return new Event(usage, BUFFER_SIZE-3);
 	}
 	
 	public void send(ByteBuffer b) {

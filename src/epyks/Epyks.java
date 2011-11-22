@@ -439,6 +439,7 @@ public class Epyks extends JFrame implements ContactControl {
 			
 			layer2.add(Box.createHorizontalGlue());
 			JButton save = new JButton("Save");
+			save.addActionListener(new Save(jnamefield));
 			save.setOpaque(false);
 			layer2.add(save);
 			layer2.add(Box.createHorizontalStrut(2));
@@ -505,6 +506,35 @@ public class Epyks extends JFrame implements ContactControl {
 				config.store(new FileWriter("data/config"), null);
 			} catch (IOException e) {
 				e.printStackTrace();
+			}
+		}
+		
+		private class Save implements ActionListener {
+		
+			private JTextField jf;
+			
+			public Save(JTextField jf) {
+				this.jf = jf;
+			}
+			
+			public void actionPerformed(ActionEvent arg0) {
+				String n = jf.getText();
+				if (n.length() > Byte.MAX_VALUE)
+					n = n.substring(0,Byte.MAX_VALUE);
+
+				user.setName(n);
+				
+				
+				Event e = new Event(usage(),n.length()+1);
+				e.buffer.put((byte) n.length());
+				e.buffer.put(n.getBytes());
+				e.buffer.flip();
+				comm.sendEvent(e);
+				
+				synchronized (this) {
+					name = n;
+					save();
+				}
 			}
 		}
 	}

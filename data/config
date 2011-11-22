@@ -1,21 +1,12 @@
-#User settings
-
+#Tue Nov 22 00:11:56 CST 2011
+default_port=11111
 name=User
-pic=defaultpic.png
-
-
-#Application Settings
-#Don't change these unless you know what you are doing
-
+server_time_delay=8000
 server=76.255.179.114\:11110
 server_keep_open=76.255.179.114\:11109
-
-buffer_size=512
-default_port=11111
+pic=defaultpic.png
 default_range=10
-
-data_time_delay=1000
-join_time_delay=1000
-server_time_delay=8000
-
 dump_packets=true
+join_time_delay=1000
+buffer_size=512
+data_time_delay=1000

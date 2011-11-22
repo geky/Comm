@@ -18,7 +18,7 @@ public class Event implements Comparable {
 	}
 	
 	public Event(byte e, int size) {
-		buffer = ByteBuffer.allocate(size);
+		buffer = ByteBuffer.allocate(size+3);
 		buffer.put(Comm.EVENT_BYTE);
 		buffer.position(2);
 		buffer.put(usage=e);
