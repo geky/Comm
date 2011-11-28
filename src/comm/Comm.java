@@ -1,6 +1,7 @@
 package comm;
 
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -11,8 +12,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 import java.util.Set;
 import java.util.Map.Entry;
 import java.util.Properties;
@@ -42,6 +45,13 @@ public class Comm {
 	public final int SERVER_TIME_DELAY;
 	
 	private final DatagramSocket SOCKET;
+	
+	@SuppressWarnings("unchecked")
+	private final Queue<Event>[] eventQueue = (Queue<Event>[])Array.newInstance(LinkedList.class, 3);
+	
+	public static final int MAX_PRIORITY = 2;
+	public static final int NORMAL_PRIORITY = 1;
+	public static final int MIN_PRIORITY = 0;
 	
 	private Thread syncher;
 	
@@ -204,9 +214,17 @@ public class Comm {
 		}
 	}
 	
+	public void sendEvent(Event e, int priority) {
+		
+	}
+	
 	public void sendEvent(Event e, Contact c) {
 		c.setEvent(e);
 		send(e.buffer,c.connection);
+	}
+	
+	public void sendEvent(Event e, Contact c, int priority) {
+		
 	}
 	
 	private static void dump(String m, byte[] bs, int len) {
