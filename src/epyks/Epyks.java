@@ -462,14 +462,6 @@ public class Epyks extends JFrame implements ContactControl {
 		public byte usage() {
 			return (byte) 0xff;
 		}
-
-		public void setUserName(String n) {
-			synchronized (this) {
-				name = n;
-			}
-
-			user.setName(n);
-		}
 		
 		public synchronized String getUserName() {
 			return name;
@@ -503,7 +495,9 @@ public class Epyks extends JFrame implements ContactControl {
 
 		public synchronized void save() {
 			try {
-				config.store(new FileWriter("data/config"), null);
+				FileWriter out = new FileWriter("data/config");
+				config.store(out, null);
+				out.close();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -533,6 +527,7 @@ public class Epyks extends JFrame implements ContactControl {
 				
 				synchronized (this) {
 					name = n;
+					config.setProperty("name", n);
 					save();
 				}
 			}

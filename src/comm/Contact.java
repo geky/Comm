@@ -7,7 +7,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public abstract class Contact {
+public abstract class Contact implements StatusObserver {
 
 	public final Connection connection;
 	
@@ -31,9 +31,6 @@ public abstract class Contact {
 		Arrays.fill(events, new Event());
 		ticks = 0;
 	}
-	
-	public abstract void status(String s);
-	public abstract void error(String s);
 	
 	public abstract void setData(ByteBuffer b);
 	
