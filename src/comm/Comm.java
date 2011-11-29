@@ -26,12 +26,21 @@ public class Comm {
 	public static final byte JOIN_ACK_TRUE_BYTE = 0x31;
 	public static final byte JOIN_ACK_FALSE_BYTE = 0x3f;
 	public static final byte DATA_BYTE = 0x40;
+	public static final byte ACK_DATA_BYTE = 0x41;
 	public static final byte EVENT_BYTE = 0x50;
 	public static final byte KEEP_OPEN_BYTE = 0x0;
 	public static final byte SERVER_REQUEST_BYTE = 0x70;
 	public static final byte SERVER_REPLY_BYTE = 0x60;
 	public static final byte NAT_WORKAROUND_REQUEST_BYTE = 0x71;
 	public static final byte NAT_WORKAROUND_FORWARD_BYTE = 0x61;
+	
+	public static final int JOIN_TASK = -1;
+	public static final int TIMEOUT_DATA_TASK = 0;
+	public static final int ACK_DATA_TASK = 1;
+	
+	public static final int MAX_PRIORITY = 2;
+	public static final int NORMAL_PRIORITY = 1;
+	public static final int MIN_PRIORITY = 0;
 	
 	public final Connection NPSERVER;
 	public final Connection NPSERVER_KEEP_OPEN;
@@ -48,10 +57,6 @@ public class Comm {
 	
 	@SuppressWarnings("unchecked")
 	private final Queue<Event>[] eventQueue = (Queue<Event>[])Array.newInstance(LinkedList.class, 3);
-	
-	public static final int MAX_PRIORITY = 2;
-	public static final int NORMAL_PRIORITY = 1;
-	public static final int MIN_PRIORITY = 0;
 	
 	private Thread syncher;
 	
@@ -125,7 +130,7 @@ public class Comm {
 	public void start() {
 		synch();
 		new Reciever().start();
-		new Sender().start();
+		//new Sender().start();
 	}
 	
 	public void synch() {
@@ -236,12 +241,13 @@ public class Comm {
 			case JOIN_ACK_FALSE_BYTE: System.out.print("JOIN_ACK_FALSE"); break;
 			case EVENT_BYTE: System.out.print("EVENT"); break;
 			case DATA_BYTE: System.out.print("DATA"); break;
+			case ACK_DATA_BYTE: System.out.print("ACK_DATA"); break;
 			case SERVER_REQUEST_BYTE: System.out.print("SERVER_REQUEST"); break;
 			case SERVER_REPLY_BYTE: System.out.print("SERVER_REPLY"); break;
 			case KEEP_OPEN_BYTE: System.out.print("KEEP_OPEN"); break;
 			case NAT_WORKAROUND_REQUEST_BYTE : System.out.print("NAT_WORKAROUND_REQUEST"); break;
 			case NAT_WORKAROUND_FORWARD_BYTE : System.out.print("NAT_WORKAROUND_FORWARD"); break;
-			default: System.out.print("NO_INTENT"); break;
+			default: System.out.print("BAD_INTENT"); break;
 		}
 		
 		System.out.print("\ttime: " + System.currentTimeMillis());
@@ -254,65 +260,65 @@ public class Comm {
 		System.out.println("]");
 	}
 	
-	public class Sender extends Thread {
-		
-		private int ticks = 0;
-		
-		@Override
-		public void run() {
-			while (true) {
-				
-				ticks = ++ticks % (SERVER_TIME_DELAY/DATA_TIME_DELAY); 
-				if (ticks == 0) {
-					ByteBuffer data = makeBuffer();
-					data.put(KEEP_OPEN_BYTE);
-					data.flip();
-					send(data,NPSERVER_KEEP_OPEN);
-				}
-				
-				boolean foreverAlone = true;
-				synchronized (contacts) {
-					for (Contact c : contacts.values()) {
-						synchronized (c) {
-							if (c.isActive()) {
-								if (c.tick())
-									c.lose();
-								else
-									foreverAlone = false;
-							}
-						}
-					}
-				}
-				
-				if (!foreverAlone) {
-					ByteBuffer data = makeBuffer();
-					data.put(DATA_BYTE);
-					data.position(2);
-					
-					for (Entry<Byte,? extends Usage> entry:uses.entrySet()) {
-						entry.getValue().pollData(data);
-					}
-					if (data.hasRemaining())
-						data.put((byte)0x0);
-					data.flip();
-					
-					synchronized (contacts) {
-						for (Contact c:contacts.values()) {
-							data.position(1);
-							data.put(c.getEventMask());
-							send(data,c.connection);
-						}
-					}
-				}
-				
-				try {
-					sleep(DATA_TIME_DELAY);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}
-		}
-	}
+//	public class Sender extends Thread {
+//		
+//		private int ticks = 0;
+//		
+//		@Override
+//		public void run() {
+//			while (true) {
+//				
+//				ticks = ++ticks % (SERVER_TIME_DELAY/DATA_TIME_DELAY); 
+//				if (ticks == 0) {
+//					ByteBuffer data = makeBuffer();
+//					data.put(KEEP_OPEN_BYTE);
+//					data.flip();
+//					send(data,NPSERVER_KEEP_OPEN);
+//				}
+//				
+//				boolean foreverAlone = true;
+//				synchronized (contacts) {
+//					for (Contact c : contacts.values()) {
+//						synchronized (c) {
+//							if (c.isActive()) {
+//								if (c.tick())
+//									c.lose();
+//								else
+//									foreverAlone = false;
+//							}
+//						}
+//					}
+//				}
+//				
+//				if (!foreverAlone) {
+//					ByteBuffer data = makeBuffer();
+//					data.put(DATA_BYTE);
+//					data.position(2);
+//					
+//					for (Entry<Byte,? extends Usage> entry:uses.entrySet()) {
+//						entry.getValue().pollData(data);
+//					}
+//					if (data.hasRemaining())
+//						data.put((byte)0x0);
+//					data.flip();
+//					
+//					synchronized (contacts) {
+//						for (Contact c:contacts.values()) {
+//							data.position(1);
+//							data.put(c.getEventMask());
+//							send(data,c.connection);
+//						}
+//					}
+//				}
+//				
+//				try {
+//					sleep(DATA_TIME_DELAY);
+//				} catch (InterruptedException e) {
+//					e.printStackTrace();
+//				}
+//			}
+//		}
+//	}
 	
 	public void add(Contact c) {
 		c.status("resolving...");

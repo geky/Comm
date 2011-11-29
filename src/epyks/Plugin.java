@@ -14,7 +14,7 @@ import comm.Usage;
 public abstract class Plugin extends JComponent implements Usage {
 
 	@Override
-	public void pollData(ByteBuffer b) {}
+	public void pollData(Contact s, ByteBuffer b) {}
 	@Override
 	public void doData(Contact s, ByteBuffer b) {}
 	@Override
