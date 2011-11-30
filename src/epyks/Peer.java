@@ -36,8 +36,8 @@ public class Peer extends Contact {
 	}
 
 	@Override
-	public void activate() {
-		super.activate();
+	public void connect() {
+		super.connect();
 		SwingUtilities.invokeLater(
 				new Runnable() {
 					public void run() {

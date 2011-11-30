@@ -26,17 +26,12 @@ public class Comm {
 	public static final byte JOIN_ACK_TRUE_BYTE = 0x31;
 	public static final byte JOIN_ACK_FALSE_BYTE = 0x3f;
 	public static final byte DATA_BYTE = 0x40;
-	public static final byte ACK_DATA_BYTE = 0x41;
 	public static final byte EVENT_BYTE = 0x50;
 	public static final byte KEEP_OPEN_BYTE = 0x0;
 	public static final byte SERVER_REQUEST_BYTE = 0x70;
 	public static final byte SERVER_REPLY_BYTE = 0x60;
 	public static final byte NAT_WORKAROUND_REQUEST_BYTE = 0x71;
 	public static final byte NAT_WORKAROUND_FORWARD_BYTE = 0x61;
-	
-	public static final int JOIN_TASK = -1;
-	public static final int TIMEOUT_DATA_TASK = 0;
-	public static final int ACK_DATA_TASK = 1;
 	
 	public static final int MAX_PRIORITY = 2;
 	public static final int NORMAL_PRIORITY = 1;
@@ -49,11 +44,14 @@ public class Comm {
 	public final int DEFAULT_PORT;
 	public final boolean DUMP_PACKETS;
 	
-	public final int DATA_TIME_DELAY;
+	public final int DATA_FAST_TIME_DELAY;
+	public final int DATA_SLOW_TIME_DELAY;
 	public final int JOIN_TIME_DELAY;
 	public final int SERVER_TIME_DELAY;
 	
 	private final DatagramSocket SOCKET;
+	
+	private final long OFFSET_TIME;
 	
 	@SuppressWarnings("unchecked")
 	private final Queue<Event>[] eventQueue = (Queue<Event>[])Array.newInstance(LinkedList.class, 3);
@@ -75,7 +73,8 @@ public class Comm {
 		DUMP_PACKETS = Boolean.parseBoolean(p.getProperty("dump_packets", "false"));
 		
 		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
-		DATA_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY));
+		DATA_FAST_TIME_DELAY = Integer.parseInt(p.getProperty("time_fast_delay",""+JOIN_TIME_DELAY));
+		DATA_SLOW_TIME_DELAY = Integer.parseInt(p.getProperty("time_slow_delay",""+JOIN_TIME_DELAY));
 		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY*8));
 		
 		String port = p.getProperty("default_port");
@@ -125,6 +124,8 @@ public class Comm {
 		}
 		NPSERVER = npserver;
 		NPSERVER_KEEP_OPEN = npunused;
+		
+		OFFSET_TIME = System.currentTimeMillis();
 	}
 	
 	public void start() {
@@ -241,7 +242,6 @@ public class Comm {
 			case JOIN_ACK_FALSE_BYTE: System.out.print("JOIN_ACK_FALSE"); break;
 			case EVENT_BYTE: System.out.print("EVENT"); break;
 			case DATA_BYTE: System.out.print("DATA"); break;
-			case ACK_DATA_BYTE: System.out.print("ACK_DATA"); break;
 			case SERVER_REQUEST_BYTE: System.out.print("SERVER_REQUEST"); break;
 			case SERVER_REPLY_BYTE: System.out.print("SERVER_REPLY"); break;
 			case KEEP_OPEN_BYTE: System.out.print("KEEP_OPEN"); break;
@@ -328,6 +328,32 @@ public class Comm {
 		}
 		
 		join(c);
+	}
+	
+	
+	public ByteBuffer getData() {
+		ByteBuffer data = makeBuffer();
+		data.put(JOIN_BYTE);
+		for (byte byt:uses.keySet()) {
+			data.put(byt);
+		}
+		data.put((byte)0x0);
+		source.getData(data);
+		data.flip();
+		return data;
+	}
+	
+	protected void poll(Contact c, ByteBuffer b) {
+		
+		for (Entry<Byte,? extends Usage> entry:uses.entrySet()) {
+			entry.getValue().pollData(c,b);
+		}
+		if (b.hasRemaining())
+			b.put((byte)0x0);
+	}
+	
+	public int time() {
+		return (int)(System.currentTimeMillis() - OFFSET_TIME);
 	}
 	
 	public void join(final Contact c) {
@@ -460,7 +486,7 @@ public class Comm {
 					synchronized (sender) {
 						sender.setPlugins(set);
 						sender.reset();
-						sender.activate();
+						sender.connect();
 					}
 					
 					ByteBuffer reply = makeBuffer();
@@ -490,7 +516,7 @@ public class Comm {
 				temp.setPlugins(set);
 				
 				temp.reset();
-				temp.activate();
+				temp.connect();
 				contacts.put(c, temp);
 				
 				ByteBuffer reply = makeBuffer();
@@ -528,7 +554,7 @@ public class Comm {
 				con.setPlugins(set);
 				
 				con.reset();
-				con.activate();
+				con.connect();
 			}
 		}
 		
@@ -577,8 +603,8 @@ public class Comm {
 				return;
 			
 			synchronized (con) {
-				if (!con.isActive())
-					con.activate();
+				if (!con.isConnected())
+					con.connect();
 				con.resetTicks();
 				
 				con.resolveEvents(bufferOfResolvedEvents,b.get());

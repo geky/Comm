@@ -69,7 +69,7 @@ public class Epyks extends JFrame implements ContactControl {
 	private Settings settings;
 
 	public Epyks() {
-		super("Epyks");
+		super("Connect");
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
 		Properties props = new Properties();
