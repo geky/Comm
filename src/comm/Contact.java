@@ -15,7 +15,7 @@ public abstract class Contact implements StatusObserver {
 
 	public final Connection connection;
 	
-	private byte eventMaskR;
+	private short eventMaskR;
 	
 	private short eventMaskS;
 	private int nextEventBit;
@@ -25,20 +25,26 @@ public abstract class Contact implements StatusObserver {
 	private Connect sender;
 	
 	private Set<Byte> plugins;
+	private boolean master;
 	
 	public Contact(Connection c) {
 		connection = c;
-		events = new Event[Byte.SIZE];
+		events = new Event[Short.SIZE];
 	}
 	
 	public abstract void setData(ByteBuffer b);
 	
-	public synchronized void setPlugins(Set<Byte> set) {
+	protected synchronized void setConnectionData(Set<Byte> set, boolean m) {
 		plugins = set;
+		master = m;
 	}
 	
 	public synchronized Set<Byte> getPlugins() {
 		return plugins;
+	}
+
+	public synchronized boolean isMaster() { 
+		return master;
 	}
 	
 	public synchronized boolean isActive() {
@@ -60,11 +66,6 @@ public abstract class Contact implements StatusObserver {
 		Arrays.fill(events, new Event());
 	}
 	
-	public synchronized void event(Event e) {
-		if (sender != null) 
-			sender.event(e);
-	}
-	
 	protected synchronized void setEvent(Event e) {
 		eventMaskS ^= (0x1 << nextEventBit);
 		e.setBit(nextEventBit, eventMaskS);
@@ -72,8 +73,9 @@ public abstract class Contact implements StatusObserver {
 		nextEventBit = ++nextEventBit % Short.SIZE;
 	}
 	
-	public synchronized void resolveEvents(List<Event> l, short mask) {
+	public synchronized void resolveEvents(List<Event> l,int mask) {
 		mask ^= eventMaskS;
+		mask &= 0xffff;
 		for (int t=0; mask != 0; mask >>>= 0x1,t++) {
     		if ((mask & 0x1) != 0)
     			l.add(events[t]);
@@ -124,6 +126,7 @@ public abstract class Contact implements StatusObserver {
 			sender.interrupt();
 		}
 		sender = null;
+		lose();
 	}
 	
 	public synchronized void ackTrue() {
@@ -142,9 +145,9 @@ public abstract class Contact implements StatusObserver {
 		}
 	}
 	
-	public synchronized void ping(int t1, int t2) {
+	public synchronized void ping(int t) {
 		if (sender != null)
-			sender.ping(t1,t2);
+			sender.ping(t);
 	}
 	
 	private class Connect extends Thread {
@@ -152,12 +155,6 @@ public abstract class Contact implements StatusObserver {
 		private int pingTime = -1;
 		private int timeAtPing;
 		private int ping;
-		
-		private int tick = 0;
-		
-		private final Queue<Event> minEvents = new LinkedList<Event>();
-		private final Queue<Event> normEvents = new LinkedList<Event>();
-		private final Queue<Event> maxEvents = new LinkedList<Event>();
 		
 		private Connect(Comm comm) {
 			this.comm = comm;
@@ -167,28 +164,9 @@ public abstract class Contact implements StatusObserver {
 			timeAtPing = comm.time();
 		}
 		
-		public synchronized void ping(int t1, int t2) {
-			pingTime = t2;
+		public synchronized void ping(int t) {
+			pingTime = t;
 			timeAtPing = comm.time();
-		}
-		
-		public synchronized void event(Event e) {
-			switch (e.priority) {
-				case Event.MAX_PRIORITY : maxEvents.add(e); return;
-				case Event.NORM_PRIORITY : normEvents.add(e); return;
-				case Event.MIN_PRIORITY : minEvents.add(e); return;
-			}
-		}
-		
-		public synchronized Event nextTask(int tap) {
-			if (!maxEvents.isEmpty())
-				return maxEvents.poll();
-			else if (!normEvents.isEmpty() && tap < comm.DATA_SLOW_TIME_DELAY)
-				return normEvents.poll();
-			else if (!minEvents.isEmpty() && tap < comm.DATA_FAST_TIME_DELAY*2)
-				return minEvents.poll();
-			else
-				return null;
 		}
 		
 		public void run() {
@@ -224,33 +202,32 @@ public abstract class Contact implements StatusObserver {
 					deactivate();
 				} catch (InterruptedException e) {}
 				
-				while (isConnected()) {
+				boolean mastering = isMaster();
+				
+				while (isConnected()) {					
 					int tap;
-					Event next;
 					synchronized (this) {
 						tap = comm.time() - timeAtPing;
-						next = nextTask(tap);
 					}
 					
 					if (tap > (comm.JOIN_TIME_DELAY*4)) {
 						deactivate();
 						break;
-					} 
+					}
 					
-					if (next != null) {
-						setEvent(next);
-						comm.send(next.buffer,connection);
+					ByteBuffer data = comm.makeBuffer();
+					data.put(Comm.DATA_BYTE);
+					data.position(5);
+					data.putShort(getEventMask());
+					comm.poll(Contact.this,data);
+					data.flip();
+					
+					data.position(1);
+					
+					if (mastering) {
+						data.putInt(comm.time());
 					} else {
-						ByteBuffer data = comm.makeBuffer();
-						data.put(Comm.DATA_BYTE);
-						data.position(9);
-						data.putShort(getEventMask());
-						comm.poll(Contact.this,data);
-						data.flip();
-						
-						data.position(1);
-					
-						synchronized (this) {	
+						synchronized (this) {
 							if (pingTime != -1) {
 								data.putInt((comm.time()-timeAtPing) + pingTime);
 								pingTime = -1;
@@ -258,11 +235,10 @@ public abstract class Contact implements StatusObserver {
 								data.putInt(-1);
 							}
 						}
-						data.putInt(comm.time());
-						
-						comm.send(data,connection);
 					}
 					
+					comm.send(data,connection);
+				
 					try {
 						sleep(comm.DATA_FAST_TIME_DELAY);
 					} catch (InterruptedException e) {}

@@ -16,6 +16,7 @@ public class Event implements Comparable {
 	public byte bit;
 	public byte bitval;
 	public byte priority = NORM_PRIORITY; 
+	protected boolean active = false;
 	
 	protected Event() {
 		buffer = ByteBuffer.allocate(0);

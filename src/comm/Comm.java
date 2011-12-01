@@ -67,8 +67,8 @@ public class Comm {
 		DUMP_PACKETS = Boolean.parseBoolean(p.getProperty("dump_packets", "false"));
 		
 		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
-		DATA_FAST_TIME_DELAY = Integer.parseInt(p.getProperty("time_fast_delay",""+JOIN_TIME_DELAY));
-		DATA_SLOW_TIME_DELAY = Integer.parseInt(p.getProperty("time_slow_delay",""+JOIN_TIME_DELAY));
+		DATA_FAST_TIME_DELAY = Integer.parseInt(p.getProperty("time_fast_delay",""+JOIN_TIME_DELAY/4));
+		DATA_SLOW_TIME_DELAY = Integer.parseInt(p.getProperty("time_slow_delay",""+JOIN_TIME_DELAY/2));
 		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY*8));
 		
 		String port = p.getProperty("default_port");
@@ -228,13 +228,14 @@ public class Comm {
 	public void sendEvent(Event e) {
 		synchronized (contacts) {
 			for (Contact c:contacts.values()) {
-				c.event(new Event(e));
+				sendEvent(new Event(e), c);
 			}
 		}
 	}
 	
 	public void sendEvent(Event e, Contact c) {
-		c.event(e);
+		c.setEvent(e);
+		send(e.buffer,c.connection);
 	}
 	
 	private static void dump(String m, byte[] bs, int len) {
@@ -355,7 +356,7 @@ public class Comm {
 				if (sender != null) {
 					sender.setData(b);
 					synchronized (sender) {
-						sender.setPlugins(set);
+						sender.setConnectionData(set,false);
 						sender.reset();
 						sender.connect();
 					}
@@ -381,7 +382,7 @@ public class Comm {
 				}
 				
 				
-				temp.setPlugins(set);
+				temp.setConnectionData(set,false);
 				
 				temp.reset();
 				temp.connect();
@@ -415,7 +416,7 @@ public class Comm {
 			con.setData(b);
 			
 			synchronized (con) {
-				con.setPlugins(set);
+				con.setConnectionData(set,true);
 				
 				con.ackTrue();
 				con.connect();
@@ -452,8 +453,7 @@ public class Comm {
 				uses.get(e.usage).doEvent(con,e);
 		}
 		
-		private List<Event> bufferOfResolvedEvents = new ArrayList<Event>(Short.SIZE);
-		//only used in thread to prevent eccesive memory allocation
+		private List<Event> bufferOfResolvedEventsToSendInReplyOfDataEventMask = new ArrayList<Event>();
 		
 		private void data(ByteBuffer b, Connection c) {
 			Contact con;
@@ -467,15 +467,15 @@ public class Comm {
 				if (!con.isConnected())
 					con.reactivate(Comm.this);
 				
-				con.ping(b.getInt(),b.getInt());
+				con.ping(b.getInt());
 				
-				con.resolveEvents(bufferOfResolvedEvents,b.getShort());
+				con.resolveEvents(bufferOfResolvedEventsToSendInReplyOfDataEventMask,b.getShort());
 			}
 			
-			for (Event r:bufferOfResolvedEvents) {
+			for (Event r:bufferOfResolvedEventsToSendInReplyOfDataEventMask) {
 				send(r.buffer,c);
 			}
-			bufferOfResolvedEvents.clear();
+			bufferOfResolvedEventsToSendInReplyOfDataEventMask.clear();
 			
 			byte usage;
 			while (b.hasRemaining() && (usage = b.get()) != 0x0) {
