@@ -292,7 +292,7 @@ public class Epyks extends JFrame implements ContactControl {
 				}
 			}
 
-			comm.add(p);
+			comm.join(p);
 		}
 	}
 
@@ -343,7 +343,7 @@ public class Epyks extends JFrame implements ContactControl {
 			}
 
 			if (p != null) {
-				comm.add(p);
+				comm.join(p);
 			}
 		}
 	}
@@ -519,7 +519,7 @@ public class Epyks extends JFrame implements ContactControl {
 				user.setName(n);
 				
 				
-				Event e = new Event(usage(),n.length()+1);
+				Event e = new Event(usage(),n.length()+1,Event.NORM_PRIORITY);
 				e.buffer.put((byte) n.length());
 				e.buffer.put(n.getBytes());
 				e.buffer.flip();

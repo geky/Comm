@@ -9,6 +9,7 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,10 +34,6 @@ public class Comm {
 	public static final byte NAT_WORKAROUND_REQUEST_BYTE = 0x71;
 	public static final byte NAT_WORKAROUND_FORWARD_BYTE = 0x61;
 	
-	public static final int MAX_PRIORITY = 2;
-	public static final int NORMAL_PRIORITY = 1;
-	public static final int MIN_PRIORITY = 0;
-	
 	public final Connection NPSERVER;
 	public final Connection NPSERVER_KEEP_OPEN;
 	
@@ -53,14 +50,11 @@ public class Comm {
 	
 	private final long OFFSET_TIME;
 	
-	@SuppressWarnings("unchecked")
-	private final Queue<Event>[] eventQueue = (Queue<Event>[])Array.newInstance(LinkedList.class, 3);
-	
 	private Thread syncher;
+	private boolean synched;
 	
 	private final ContactControl source;
 	private final Map<Connection,Contact> contacts = new HashMap<Connection,Contact>();
-	private final Map<Connection,Thread> joiners = new HashMap<Connection,Thread>();
 	
 	private final Map<Byte,? extends Usage> uses;
 	
@@ -129,53 +123,72 @@ public class Comm {
 	}
 	
 	public void start() {
-		synch();
 		new Reciever().start();
-		//new Sender().start();
+		synch();
 	}
 	
-	public void synch() {
-		synchronized (joiners) {
-			if (syncher != null)
-				return;
-			
-			syncher = new Thread() {
-				public void run() {					
+	public synchronized boolean isSynched() {
+		return synched;
+	}
+	
+	private class ServerThread extends Thread {
+		public void run() {
+			while (true) {
+				try {
 					String attempt = "synching....";
+					ByteBuffer request = makeBuffer();
+					request.put(SERVER_REQUEST_BYTE).flip();
+					
+					for (int t=0; t<4; t++) {
+						source.status(attempt.substring(0, attempt.length()-3+t));
+						send(request,NPSERVER);
+						
+						Thread.sleep(JOIN_TIME_DELAY);
+					}
+				
+					Connection c;
+					source.status("guessing...");
+					
+					sleep(1000);
 					
 					try {
-						ByteBuffer request = makeBuffer();
-						request.put(SERVER_REQUEST_BYTE).flip();
-						
-						for (int t=0; t<4; t++) {
-							source.status(attempt.substring(0, attempt.length()-3+t));
-							send(request,NPSERVER);
-							
-							Thread.sleep(JOIN_TIME_DELAY);
+						InetAddress me = InetAddress.getLocalHost();
+						c = new Connection(me,SOCKET.getLocalPort());
+						source.setOwnerConnection(c,false);
+						synchronized (Comm.this) {
+							synched = true;
 						}
-					
-						Connection c;
-						source.status("guessing...");
-						
-						sleep(1000);
-						
-						try {
-							InetAddress me = InetAddress.getLocalHost();
-							c = new Connection(me,SOCKET.getLocalPort());
-							source.setOwnerConnection(c,false);
-						} catch (Exception e) {
-							source.error("Couldn't obtain IP");
-						}
-					} catch (InterruptedException e) {
-					} finally {
-						synchronized (joiners) {
+					} catch (Exception e) {
+						source.error("Couldn't obtain IP");
+						synchronized (Comm.this) {
+							synched = false;
 							syncher = null;
 						}
+						break;
 					}
+				} catch (InterruptedException e) {}
+				
+				while (isSynched()) {
+					ByteBuffer data = makeBuffer();
+					data.put(KEEP_OPEN_BYTE);
+					data.flip();
+					send(data,NPSERVER_KEEP_OPEN);
+					
+					try {
+						Thread.sleep(SERVER_TIME_DELAY);
+					} catch (InterruptedException e) {}
 				}
-			};
-			
+			}
+		}		
+	}
+	
+	public synchronized void synch() {
+		synched = false;
+		if (syncher == null) {
+			syncher = new ServerThread();
 			syncher.start();
+		} else {
+			syncher.interrupt();
 		}
 	}
 	
@@ -184,7 +197,7 @@ public class Comm {
 	}
 	
 	public Event makeEvent(byte usage) {
-		return new Event(usage, BUFFER_SIZE-3);
+		return new Event(usage, BUFFER_SIZE-3, Event.NORM_PRIORITY);
 	}
 	
 	public void send(ByteBuffer b) {
@@ -215,22 +228,13 @@ public class Comm {
 	public void sendEvent(Event e) {
 		synchronized (contacts) {
 			for (Contact c:contacts.values()) {
-				sendEvent(new Event(e),c);
+				c.event(new Event(e));
 			}
 		}
 	}
 	
-	public void sendEvent(Event e, int priority) {
-		
-	}
-	
 	public void sendEvent(Event e, Contact c) {
-		c.setEvent(e);
-		send(e.buffer,c.connection);
-	}
-	
-	public void sendEvent(Event e, Contact c, int priority) {
-		
+		c.event(e);
 	}
 	
 	private static void dump(String m, byte[] bs, int len) {
@@ -247,7 +251,7 @@ public class Comm {
 			case KEEP_OPEN_BYTE: System.out.print("KEEP_OPEN"); break;
 			case NAT_WORKAROUND_REQUEST_BYTE : System.out.print("NAT_WORKAROUND_REQUEST"); break;
 			case NAT_WORKAROUND_FORWARD_BYTE : System.out.print("NAT_WORKAROUND_FORWARD"); break;
-			default: System.out.print("BAD_INTENT"); break;
+			default: throw new RuntimeException("BAD_INTENT");//System.out.print("BAD_INTENT"); break;
 		}
 		
 		System.out.print("\ttime: " + System.currentTimeMillis());
@@ -260,93 +264,18 @@ public class Comm {
 		System.out.println("]");
 	}
 	
-//	public class Sender extends Thread {
-//		
-//		private int ticks = 0;
-//		
-//		@Override
-//		public void run() {
-//			while (true) {
-//				
-//				ticks = ++ticks % (SERVER_TIME_DELAY/DATA_TIME_DELAY); 
-//				if (ticks == 0) {
-//					ByteBuffer data = makeBuffer();
-//					data.put(KEEP_OPEN_BYTE);
-//					data.flip();
-//					send(data,NPSERVER_KEEP_OPEN);
-//				}
-//				
-//				boolean foreverAlone = true;
-//				synchronized (contacts) {
-//					for (Contact c : contacts.values()) {
-//						synchronized (c) {
-//							if (c.isActive()) {
-//								if (c.tick())
-//									c.lose();
-//								else
-//									foreverAlone = false;
-//							}
-//						}
-//					}
-//				}
-//				
-//				if (!foreverAlone) {
-//					ByteBuffer data = makeBuffer();
-//					data.put(DATA_BYTE);
-//					data.position(2);
-//					
-//					for (Entry<Byte,? extends Usage> entry:uses.entrySet()) {
-//						entry.getValue().pollData(data);
-//					}
-//					if (data.hasRemaining())
-//						data.put((byte)0x0);
-//					data.flip();
-//					
-//					synchronized (contacts) {
-//						for (Contact c:contacts.values()) {
-//							data.position(1);
-//							data.put(c.getEventMask());
-//							send(data,c.connection);
-//						}
-//					}
-//				}
-//				
-//				try {
-//					sleep(DATA_TIME_DELAY);
-//				} catch (InterruptedException e) {
-//					e.printStackTrace();
-//				}
-//			}
-//		}
-//	}
 	
-	public void add(Contact c) {
-		c.status("resolving...");
-		c.lose();
-		synchronized (contacts) {
-			contacts.put(c.connection,c);
-		}
-		
-		join(c);
-	}
-	
-	
-	public ByteBuffer getData() {
-		ByteBuffer data = makeBuffer();
-		data.put(JOIN_BYTE);
+	public void getData(ByteBuffer data) {
 		for (byte byt:uses.keySet()) {
 			data.put(byt);
 		}
 		data.put((byte)0x0);
 		source.getData(data);
-		data.flip();
-		return data;
 	}
 	
 	protected void poll(Contact c, ByteBuffer b) {
-		
-		for (Entry<Byte,? extends Usage> entry:uses.entrySet()) {
-			entry.getValue().pollData(c,b);
+		for (byte byt:c.getPlugins()) {
+			uses.get(byt).pollData(c,b);
 		}
 		if (b.hasRemaining())
 			b.put((byte)0x0);
@@ -356,74 +285,17 @@ public class Comm {
 		return (int)(System.currentTimeMillis() - OFFSET_TIME);
 	}
 	
-	public void join(final Contact c) {
-		Thread temp = new Thread() {
-			public void run() {	
-				try {
-					String attempt = "joining....";
-					
-					ByteBuffer reply = makeBuffer();
-					reply.put(JOIN_BYTE);
-					for (byte byt:uses.keySet()) {
-						reply.put(byt);
-					}
-					reply.put((byte)0x0);
-					source.getData(reply);
-					reply.flip();
-									
-					for (int t=0; t<4; t++) {
-						c.status(attempt.substring(0, attempt.length()-3+t));
-						send(reply,c.connection);
-						Thread.sleep(JOIN_TIME_DELAY);
-					}
-					
-					attempt = "workaround....";
-					
-					reply.clear();
-					reply.put(NAT_WORKAROUND_REQUEST_BYTE);
-					c.connection.toBytes(reply);
-					for (byte byt:uses.keySet()) {
-						reply.put(byt);
-					}
-					reply.put((byte)0x0);
-					source.getData(reply);
-					reply.flip();
-					
-					for (int t=0; t<4; t++) {
-						c.status(attempt.substring(0, attempt.length()-3+t));
-						send(reply,NPSERVER);
-						Thread.sleep(JOIN_TIME_DELAY);
-					}
-					
-					c.status("no response");
-					
-				} catch (InterruptedException e) {
-				} finally {
-					synchronized (joiners) {
-						joiners.remove(c.connection);
-					}
-				}
-			}
-		};
-		
-		
-		synchronized (joiners) {
-			if (!joiners.containsKey(c.connection)) {
-				joiners.put(c.connection,temp);
-				temp.start();
-			}
+	public void join(Contact c) {
+		synchronized (contacts) {
+			if (!contacts.containsKey(c.connection))
+				contacts.put(c.connection,c);
 		}
+		c.join(this);
 	}
 	
-	
 	public void remove(Contact c) {
-		synchronized (joiners) {
-			Thread temp = joiners.get(c.connection);
-			if (temp != null)
-				temp.interrupt();
-		}
 		synchronized (contacts) {
-			contacts.remove(c.connection);
+			contacts.remove(c.connection).deactivate();
 		}
 	}
 	
@@ -480,8 +352,7 @@ public class Comm {
 			synchronized (contacts) {
 				sender = contacts.get(c);
 			
-				if (sender != null) {			
-					
+				if (sender != null) {
 					sender.setData(b);
 					synchronized (sender) {
 						sender.setPlugins(set);
@@ -491,12 +362,9 @@ public class Comm {
 					
 					ByteBuffer reply = makeBuffer();
 					reply.put(JOIN_ACK_TRUE_BYTE);
-					for (byte byt:uses.keySet()) {
-						reply.put(byt);
-					}
-					reply.put((byte)0x0);
-					source.getData(reply);
+					getData(reply);
 					reply.flip();
+					
 					send(reply,c);
 					
 					return;
@@ -521,11 +389,7 @@ public class Comm {
 				
 				ByteBuffer reply = makeBuffer();
 				reply.put(JOIN_ACK_TRUE_BYTE);
-				for (byte byt:uses.keySet()) {
-					reply.put(byt);
-				}
-				reply.put((byte)0x0);
-				source.getData(reply);
+				getData(reply);
 				reply.flip();
 				send(reply,c);
 				
@@ -535,12 +399,12 @@ public class Comm {
 		
 		private void joinAckTrue(ByteBuffer b, Connection c) {
 			Contact con;
-			synchronized (joiners) {
-				joiners.get(c).interrupt();
-			}
 			synchronized (contacts) {
 				con = contacts.get(c);
 			}
+			
+			if (con == null)
+				return;
 			
 			HashSet<Byte> set = new HashSet<Byte>(uses.size());
 			for (byte byt = b.get(); byt != 0x0; byt = b.get()) {
@@ -553,20 +417,22 @@ public class Comm {
 			synchronized (con) {
 				con.setPlugins(set);
 				
-				con.reset();
+				con.ackTrue();
 				con.connect();
 			}
 		}
 		
 		private void joinAckFalse(ByteBuffer b, Connection c) {
 			Contact con;
-			synchronized (joiners) {
-				joiners.get(c).interrupt();
-			}
 			synchronized (contacts) {
 				con = contacts.get(c);
 			}
+			
+			if (con == null)
+				return;
+			
 			synchronized (con) {
+				con.ackFalse();
 				con.status("waiting...");
 			}
 		}
@@ -582,16 +448,11 @@ public class Comm {
 			
 			Event e = new Event(b);
 			
-			boolean doEvent;
-			synchronized (con) {
-				doEvent = con.collideEvent(e);
-			}
-			
-			if (doEvent) 
+			if (con.collideEvent(e)) 
 				uses.get(e.usage).doEvent(con,e);
 		}
 		
-		private List<Event> bufferOfResolvedEvents = new ArrayList<Event>(Byte.SIZE);
+		private List<Event> bufferOfResolvedEvents = new ArrayList<Event>(Short.SIZE);
 		//only used in thread to prevent eccesive memory allocation
 		
 		private void data(ByteBuffer b, Connection c) {
@@ -604,10 +465,11 @@ public class Comm {
 			
 			synchronized (con) {
 				if (!con.isConnected())
-					con.connect();
-				con.resetTicks();
+					con.reactivate(Comm.this);
 				
-				con.resolveEvents(bufferOfResolvedEvents,b.get());
+				con.ping(b.getInt(),b.getInt());
+				
+				con.resolveEvents(bufferOfResolvedEvents,b.getShort());
 			}
 			
 			for (Event r:bufferOfResolvedEvents) {
@@ -617,12 +479,7 @@ public class Comm {
 			
 			byte usage;
 			while (b.hasRemaining() && (usage = b.get()) != 0x0) {
-				Usage use = uses.get(usage);
-				if (use != null) {
-					use.doData(con,b);
-				} else {
-					b.position((b.getShort() & 0xffff)+b.position());
-				}
+				uses.get(usage).doData(con,b);
 			}
 		}
 		
@@ -636,12 +493,10 @@ public class Comm {
 		
 		private void serverReply(ByteBuffer b, Connection c) {
 			try {
-				synchronized (joiners) {
-					if (syncher != null) {
-						syncher.interrupt();
-					}
+				synchronized (this) {
+					synched = true;
+					syncher.interrupt();
 				}
-
 				Connection i = new Connection(b);
 				
 				source.setOwnerConnection(i,true);

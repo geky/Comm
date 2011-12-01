@@ -37,7 +37,6 @@ public class Peer extends Contact {
 
 	@Override
 	public void connect() {
-		super.connect();
 		SwingUtilities.invokeLater(
 				new Runnable() {
 					public void run() {
@@ -51,7 +50,6 @@ public class Peer extends Contact {
 
 	@Override
 	public void lose() {
-		super.lose();
 		SwingUtilities.invokeLater(
 				new Runnable() {
 					public void run() {
