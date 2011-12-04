@@ -150,11 +150,17 @@ public abstract class Contact implements StatusObserver {
 			sender.ping(t);
 	}
 	
+	public synchronized void ping(int t,byte r) {
+		if (sender != null)
+			sender.ping(t,r);
+	}
+	
 	private class Connect extends Thread {
 		private final Comm comm;
 		private int pingTime = -1;
 		private int timeAtPing;
-		private int ping;
+		private int rtt = -1;
+		private byte rateDelay;
 		
 		private Connect(Comm comm) {
 			this.comm = comm;
@@ -165,6 +171,11 @@ public abstract class Contact implements StatusObserver {
 		}
 		
 		public synchronized void ping(int t) {
+			rtt = (int)((comm.RTT_ALPHA * rtt) + ((1-comm.RTT_ALPHA) * t));
+		}
+		
+		public synchronized void ping(int t,byte r) {
+			rateDelay = r;
 			pingTime = t;
 			timeAtPing = comm.time();
 		}
@@ -226,6 +237,7 @@ public abstract class Contact implements StatusObserver {
 					
 					if (mastering) {
 						data.putInt(comm.time());
+						data.put(rateDelay);
 					} else {
 						synchronized (this) {
 							if (pingTime != -1) {

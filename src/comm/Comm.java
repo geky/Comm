@@ -46,6 +46,8 @@ public class Comm {
 	public final int JOIN_TIME_DELAY;
 	public final int SERVER_TIME_DELAY;
 	
+	public final float RTT_ALPHA;
+	
 	private final DatagramSocket SOCKET;
 	
 	private final long OFFSET_TIME;
@@ -70,6 +72,7 @@ public class Comm {
 		DATA_FAST_TIME_DELAY = Integer.parseInt(p.getProperty("time_fast_delay",""+JOIN_TIME_DELAY/4));
 		DATA_SLOW_TIME_DELAY = Integer.parseInt(p.getProperty("time_slow_delay",""+JOIN_TIME_DELAY/2));
 		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY*8));
+		RTT_ALPHA = Float.parseFloat(p.getProperty("rtt_alpha",""+0.5));
 		
 		String port = p.getProperty("default_port");
 		String portRange = p.getProperty("default_range");
@@ -238,7 +241,7 @@ public class Comm {
 		send(e.buffer,c.connection);
 	}
 	
-	private static void dump(String m, byte[] bs, int len) {
+	private void dump(String m, byte[] bs, int len) {
 
 		System.out.print(m + "\tintent: ");
 		switch (len>0?bs[0]:-1) {
@@ -255,7 +258,7 @@ public class Comm {
 			default: throw new RuntimeException("BAD_INTENT");//System.out.print("BAD_INTENT"); break;
 		}
 		
-		System.out.print("\ttime: " + System.currentTimeMillis());
+		System.out.print("\ttime: " + time());
 		System.out.print("\tsize: " + len + " ");
 		System.out.print("\tdata: [" + (len<=0?"":(Integer.toHexString((bs[0] & 0xf0) >> 0x4) + Integer.toHexString(bs[0] & 0x0f).toUpperCase())));
 		
@@ -467,7 +470,10 @@ public class Comm {
 				if (!con.isConnected())
 					con.reactivate(Comm.this);
 				
-				con.ping(b.getInt());
+				if (con.isMaster())
+					con.ping(b.getInt());
+				else
+					con.ping(b.getInt(),b.get());
 				
 				con.resolveEvents(bufferOfResolvedEventsToSendInReplyOfDataEventMask,b.getShort());
 			}
