@@ -41,13 +41,15 @@ public class Comm {
 	public final boolean DUMP_PACKETS;
 	public final byte DUMP_INFO;
 	public final PrintStream DUMP_STREAM;
-	
-	public final int DATA_FAST_TIME_DELAY;
-	public final int DATA_SLOW_TIME_DELAY;
+
 	public final int JOIN_TIME_DELAY;
 	public final int SERVER_TIME_DELAY;
 	
+	protected volatile int fastDelay;
+	protected volatile int slowDelay;
+	
 	public final float RTT_ALPHA;
+	public final int RTT_TIMEOUT;
 	
 	private final DatagramSocket SOCKET;
 	
@@ -95,10 +97,11 @@ public class Comm {
 		}
 		
 		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
-		DATA_FAST_TIME_DELAY = Integer.parseInt(p.getProperty("time_fast_delay",""+JOIN_TIME_DELAY/4));
-		DATA_SLOW_TIME_DELAY = Integer.parseInt(p.getProperty("time_slow_delay",""+JOIN_TIME_DELAY/2));
+		fastDelay = Integer.parseInt(p.getProperty("time_fast_delay",""+JOIN_TIME_DELAY/4));
+		slowDelay = Integer.parseInt(p.getProperty("time_slow_delay",""+JOIN_TIME_DELAY/2));
 		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY*8));
-		RTT_ALPHA = Float.parseFloat(p.getProperty("rtt_alpha",""+0.5));
+		RTT_ALPHA = Float.parseFloat(p.getProperty("rtt_alpha",""+0.875));
+		RTT_TIMEOUT = Integer.parseInt(p.getProperty("rtt_timeout",""+fastDelay));
 		
 		String port = p.getProperty("default_port");
 		String portRange = p.getProperty("default_range");
@@ -149,6 +152,14 @@ public class Comm {
 		NPSERVER_KEEP_OPEN = npunused;
 		
 		OFFSET_TIME = System.currentTimeMillis();
+	}
+	
+	public void setFastDelay(int d) {
+		fastDelay = d;
+	}
+	
+	public void setSlowDelay(int d) {
+		slowDelay = d;
 	}
 	
 	public void start() {

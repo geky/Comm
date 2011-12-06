@@ -157,11 +157,12 @@ public abstract class Contact implements StatusObserver {
 		private final Comm comm;
 		private int pingTime = -1;
 		private int timeAtPing;
-		private int rtt = -1;
-		private byte rateDelay = (byte) 0xAB;
+		private int rtt = 0;
+		private int rateDelay;
 		
 		private Connect(Comm comm) {
 			this.comm = comm;
+			rateDelay = comm.fastDelay;
 		}
 		
 		public synchronized void ping() {
@@ -170,14 +171,18 @@ public abstract class Contact implements StatusObserver {
 		
 		public synchronized void ping(int t) {
 			timeAtPing = comm.time();
-			t = timeAtPing - t;
-			rtt = (int)((comm.RTT_ALPHA * rtt) + ((1-comm.RTT_ALPHA) * t));
-			//System.out.println(rtt);
+			
+			if (t > 0) {
+				t = timeAtPing - t;
+				rtt = (int)((comm.RTT_ALPHA * rtt) + ((1-comm.RTT_ALPHA) * t));
+				
+				System.out.println(t + "  " + rtt);
+			}
 		}
 		
 		public synchronized void ping(int t,byte r) {
 			timeAtPing = comm.time();
-			rateDelay = r;
+			//rateDelay = r;		TODO make r a function of some constant so r can fit in a byte without overflow
 			pingTime = t;
 		}
 		
@@ -238,24 +243,28 @@ public abstract class Contact implements StatusObserver {
 					
 					data.position(1);
 					
-					if (mastering) {
-						data.putInt(comm.time());
-						data.put(rateDelay);
-					} else {
-						synchronized (this) {
+					int delay;
+					synchronized (this) {
+						if (mastering) {
+							data.putInt(comm.time());
+							data.put((byte)rateDelay);
+						} else {
 							if (pingTime != -1) {
 								data.putInt((comm.time()-timeAtPing) + pingTime);
+								System.out.println(comm.time() + "  " + timeAtPing + "  " + (comm.time()-timeAtPing));
 								pingTime = -1;
 							} else {
 								data.putInt(-1);
 							}
 						}
+						
+						delay = rateDelay;
 					}
 					
 					comm.send(data,connection);
 				
 					try {
-						sleep(comm.DATA_FAST_TIME_DELAY);
+						sleep(delay);
 					} catch (InterruptedException e) {}
 				}
 			}
