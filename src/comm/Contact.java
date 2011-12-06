@@ -130,6 +130,7 @@ public abstract class Contact implements StatusObserver {
 	}
 	
 	public synchronized void ackTrue() {
+		System.out.println("acked true");
 		if (sender != null) {
 			connected = true;
 			sender.ping();
@@ -138,11 +139,8 @@ public abstract class Contact implements StatusObserver {
 	}
 	
 	public synchronized void ackFalse() {
-		if (sender != null) {
-			Thread temp = sender;
-			deactivate();
-			temp.interrupt();
-		}
+		deactivate();
+		status("waiting...");
 	}
 	
 	public synchronized void ping(int t) {
@@ -160,7 +158,7 @@ public abstract class Contact implements StatusObserver {
 		private int pingTime = -1;
 		private int timeAtPing;
 		private int rtt = -1;
-		private byte rateDelay;
+		private byte rateDelay = (byte) 0xAB;
 		
 		private Connect(Comm comm) {
 			this.comm = comm;
@@ -171,47 +169,52 @@ public abstract class Contact implements StatusObserver {
 		}
 		
 		public synchronized void ping(int t) {
+			timeAtPing = comm.time();
+			t = timeAtPing - t;
 			rtt = (int)((comm.RTT_ALPHA * rtt) + ((1-comm.RTT_ALPHA) * t));
+			//System.out.println(rtt);
 		}
 		
 		public synchronized void ping(int t,byte r) {
+			timeAtPing = comm.time();
 			rateDelay = r;
 			pingTime = t;
-			timeAtPing = comm.time();
 		}
 		
 		public void run() {
 			while (isActive()) {
-				try {
-					String attempt = "joining....";
-					ByteBuffer joinPacket = comm.makeBuffer();
-					joinPacket.put(Comm.JOIN_BYTE);
-					comm.getData(joinPacket);
-					joinPacket.flip();
-					
-					for (int t=0; t<4; t++) {
-						status(attempt.substring(0, attempt.length()-3+t));
-						comm.send(joinPacket,connection);
+				if (!isConnected()) {
+					try {
+						String attempt = "joining....";
+						ByteBuffer joinPacket = comm.makeBuffer();
+						joinPacket.put(Comm.JOIN_BYTE);
+						comm.getData(joinPacket);
+						joinPacket.flip();
 						
-						Thread.sleep(comm.JOIN_TIME_DELAY);
-					}
-					
-					attempt = "workaround....";
-					ByteBuffer waPacket = comm.makeBuffer();
-					waPacket.put(Comm.NAT_WORKAROUND_REQUEST_BYTE);
-					connection.toBytes(waPacket);
-					comm.getData(waPacket);
-					waPacket.flip();
-					
-					for (int t=0; t<4; t++) {
-						status(attempt.substring(0, attempt.length()-3+t));
-						comm.send(waPacket,comm.NPSERVER);
+						for (int t=0; t<4; t++) {
+							status(attempt.substring(0, attempt.length()-3+t));
+							comm.send(joinPacket,connection);
+							
+							Thread.sleep(comm.JOIN_TIME_DELAY);
+						}
 						
-						Thread.sleep(comm.JOIN_TIME_DELAY);
-					}
-					
-					deactivate();
-				} catch (InterruptedException e) {}
+						attempt = "workaround....";
+						ByteBuffer waPacket = comm.makeBuffer();
+						waPacket.put(Comm.NAT_WORKAROUND_REQUEST_BYTE);
+						connection.toBytes(waPacket);
+						comm.getData(waPacket);
+						waPacket.flip();
+						
+						for (int t=0; t<4; t++) {
+							status(attempt.substring(0, attempt.length()-3+t));
+							comm.send(waPacket,comm.NPSERVER);
+							
+							Thread.sleep(comm.JOIN_TIME_DELAY);
+						}
+						
+						deactivate();
+					} catch (InterruptedException e) {}
+				}
 				
 				boolean mastering = isMaster();
 				
@@ -228,7 +231,7 @@ public abstract class Contact implements StatusObserver {
 					
 					ByteBuffer data = comm.makeBuffer();
 					data.put(Comm.DATA_BYTE);
-					data.position(5);
+					data.position(mastering?6:5);
 					data.putShort(getEventMask());
 					comm.poll(Contact.this,data);
 					data.flip();

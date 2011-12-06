@@ -1,7 +1,11 @@
 package comm;
 
+import java.io.BufferedOutputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.lang.reflect.Array;
+import java.io.OutputStream;
+import java.io.PrintStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -9,16 +13,11 @@ import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
-import java.util.Set;
-import java.util.Map.Entry;
 import java.util.Properties;
 
 
@@ -40,6 +39,8 @@ public class Comm {
 	public final int BUFFER_SIZE;
 	public final int DEFAULT_PORT;
 	public final boolean DUMP_PACKETS;
+	public final byte DUMP_INFO;
+	public final PrintStream DUMP_STREAM;
 	
 	public final int DATA_FAST_TIME_DELAY;
 	public final int DATA_SLOW_TIME_DELAY;
@@ -67,6 +68,31 @@ public class Comm {
 		
 		BUFFER_SIZE = Integer.parseInt(p.getProperty("buffer_size","512"));
 		DUMP_PACKETS = Boolean.parseBoolean(p.getProperty("dump_packets", "false"));
+		if (DUMP_PACKETS) {
+			String inf = p.getProperty("dump_info","0x1f");
+			if (inf.startsWith("0x")) {
+				DUMP_INFO = (byte)Integer.parseInt(inf.substring(2),16);
+			} else {
+				DUMP_INFO = (byte)Integer.parseInt(inf);
+			}
+			
+			String s = p.getProperty("dump_file");
+			if (s == null) {
+				DUMP_STREAM = System.out;
+			} else {
+				OutputStream fo;
+				try {
+					fo = new BufferedOutputStream(new FileOutputStream(s));
+				} catch (FileNotFoundException e) {
+					e.printStackTrace();
+					fo = null;
+				} 
+				DUMP_STREAM = new PrintStream(fo);
+			}
+		} else {
+			DUMP_STREAM = null;
+			DUMP_INFO = 0;
+		}
 		
 		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
 		DATA_FAST_TIME_DELAY = Integer.parseInt(p.getProperty("time_fast_delay",""+JOIN_TIME_DELAY/4));
@@ -219,7 +245,7 @@ public class Comm {
 		DatagramPacket dp = dest.makePacket(b);
 		
 		if (DUMP_PACKETS)
-			dump("Sent to " + dest.toString(), b.array(), b.limit());
+			dump("Sent" ,dest.toString(), b.array(), b.limit());
 		
 		try {
 			SOCKET.send(dp);
@@ -241,31 +267,34 @@ public class Comm {
 		send(e.buffer,c.connection);
 	}
 	
-	private void dump(String m, byte[] bs, int len) {
-
-		System.out.print(m + "\tintent: ");
-		switch (len>0?bs[0]:-1) {
-			case JOIN_BYTE: System.out.print("JOIN"); break;
-			case JOIN_ACK_TRUE_BYTE: System.out.print("JOIN_ACK_TRUE"); break;
-			case JOIN_ACK_FALSE_BYTE: System.out.print("JOIN_ACK_FALSE"); break;
-			case EVENT_BYTE: System.out.print("EVENT"); break;
-			case DATA_BYTE: System.out.print("DATA"); break;
-			case SERVER_REQUEST_BYTE: System.out.print("SERVER_REQUEST"); break;
-			case SERVER_REPLY_BYTE: System.out.print("SERVER_REPLY"); break;
-			case KEEP_OPEN_BYTE: System.out.print("KEEP_OPEN"); break;
-			case NAT_WORKAROUND_REQUEST_BYTE : System.out.print("NAT_WORKAROUND_REQUEST"); break;
-			case NAT_WORKAROUND_FORWARD_BYTE : System.out.print("NAT_WORKAROUND_FORWARD"); break;
-			default: throw new RuntimeException("BAD_INTENT");//System.out.print("BAD_INTENT"); break;
-		}
+	private void dump(String m, String ip, byte[] bs, int len) {
 		
-		System.out.print("\ttime: " + time());
-		System.out.print("\tsize: " + len + " ");
-		System.out.print("\tdata: [" + (len<=0?"":(Integer.toHexString((bs[0] & 0xf0) >> 0x4) + Integer.toHexString(bs[0] & 0x0f).toUpperCase())));
-		
-		for (int t=1; t<len; t++) {
-			System.out.print((" " + Integer.toHexString((bs[t] & 0xf0) >> 0x4) + Integer.toHexString(bs[t] & 0x0f)).toUpperCase());
+		if ((DUMP_INFO & 0x20) != 0) DUMP_STREAM.print(m + " ");
+		if ((DUMP_INFO & 0x10) != 0) DUMP_STREAM.print(ip + " ");
+		if ((DUMP_INFO & 0x08) != 0) DUMP_STREAM.print("t-" + time() + " ");
+		if ((DUMP_INFO & 0x04) != 0) {
+			switch (len>0?bs[0]:-1) {
+				case JOIN_BYTE: DUMP_STREAM.print("JOIN "); break;
+				case JOIN_ACK_TRUE_BYTE: DUMP_STREAM.print("JOIN_ACK_TRUE "); break;
+				case JOIN_ACK_FALSE_BYTE: DUMP_STREAM.print("JOIN_ACK_FALSE "); break;
+				case EVENT_BYTE: DUMP_STREAM.print("EVENT "); break;
+				case DATA_BYTE: DUMP_STREAM.print("DATA "); break;
+				case SERVER_REQUEST_BYTE: DUMP_STREAM.print("SERVER_REQUEST "); break;
+				case SERVER_REPLY_BYTE: DUMP_STREAM.print("SERVER_REPLY "); break;
+				case KEEP_OPEN_BYTE: DUMP_STREAM.print("KEEP_OPEN "); break;
+				case NAT_WORKAROUND_REQUEST_BYTE : DUMP_STREAM.print("NAT_WORKAROUND_REQUEST "); break;
+				case NAT_WORKAROUND_FORWARD_BYTE : DUMP_STREAM.print("NAT_WORKAROUND_FORWARD "); break;
+				default: throw new RuntimeException("BAD_INTENT");//System.out.print("BAD_INTENT "); break;
+			}
 		}
-		System.out.println("]");
+		if ((DUMP_INFO & 0x2) != 0) DUMP_STREAM.print("L" + len + " "); 
+		if ((DUMP_INFO & 0x1) != 0) {
+			DUMP_STREAM.print(" [" + (len<=0?"":(Integer.toHexString((bs[0] & 0xf0) >> 0x4) + Integer.toHexString(bs[0] & 0x0f).toUpperCase())));
+			for (int t=1; t<len; t++) {
+				DUMP_STREAM.print((" " + Integer.toHexString((bs[t] & 0xf0) >> 0x4) + Integer.toHexString(bs[t] & 0x0f)).toUpperCase());
+			}
+			DUMP_STREAM.println("]");
+		}
 	}
 	
 	
@@ -323,7 +352,7 @@ public class Comm {
 			        byte head = buffer.get();
 			        
 			        if (DUMP_PACKETS)
-						dump("Recieved from " + c.toString(), buffer.array(), buffer.limit());
+						dump("Rec ",c.toString(), buffer.array(), buffer.limit());
 			        
 			        switch (head) {
 			        	case JOIN_BYTE: join(buffer,c); continue;
@@ -401,7 +430,7 @@ public class Comm {
 			}		
 		}
 		
-		private void joinAckTrue(ByteBuffer b, Connection c) {
+		private void joinAckTrue(ByteBuffer b, Connection c) {			
 			Contact con;
 			synchronized (contacts) {
 				con = contacts.get(c);
@@ -435,10 +464,7 @@ public class Comm {
 			if (con == null)
 				return;
 			
-			synchronized (con) {
-				con.ackFalse();
-				con.status("waiting...");
-			}
+			con.ackFalse();
 		}
 		
 		private void event(ByteBuffer b, Connection c) {
