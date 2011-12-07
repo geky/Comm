@@ -130,7 +130,6 @@ public abstract class Contact implements StatusObserver {
 	}
 	
 	public synchronized void ackTrue() {
-		System.out.println("acked true");
 		if (sender != null) {
 			connected = true;
 			sender.ping();
@@ -171,18 +170,35 @@ public abstract class Contact implements StatusObserver {
 		
 		public synchronized void ping(int t) {
 			timeAtPing = comm.time();
+			pingTime = 0;
 			
-			if (t > 0) {
-				t = timeAtPing - t;
-				rtt = (int)((comm.RTT_ALPHA * rtt) + ((1-comm.RTT_ALPHA) * t));
-				
-				System.out.println(t + "  " + rtt);
+			if (t < 0) 
+				return;
+			
+			t = timeAtPing - t;
+			rtt = (int)((comm.RTT_ALPHA * rtt) + ((1-comm.RTT_ALPHA) * t));
+			
+			if (rtt > comm.RTT_TIMEOUT) {
+				System.out.println("AAAAAAAH");
+				rateDelay += rateDelay/2;
+				rtt = 0;
+			} else {
+				rateDelay -= comm.TIME_BLOCK;
 			}
+			
+			if (rateDelay < comm.TIME_BLOCK)
+				rateDelay = comm.TIME_BLOCK;
+			else if (rateDelay < comm.fastDelay)
+				rateDelay = comm.fastDelay;
+			
+			
+			
+			System.out.println(t + "  " + rtt + " : " + rateDelay);
 		}
 		
-		public synchronized void ping(int t,byte r) {
+		public synchronized void ping(int t,int r) {
 			timeAtPing = comm.time();
-			//rateDelay = r;		TODO make r a function of some constant so r can fit in a byte without overflow
+			rateDelay = (r & 0xff) * comm.TIME_BLOCK;
 			pingTime = t;
 		}
 		
@@ -247,14 +263,24 @@ public abstract class Contact implements StatusObserver {
 					synchronized (this) {
 						if (mastering) {
 							data.putInt(comm.time());
-							data.put((byte)rateDelay);
+							data.put((byte)(rateDelay/comm.TIME_BLOCK));
+							if (pingTime < 0) {
+								if (rateDelay < comm.JOIN_TIME_DELAY)
+									rateDelay += rateDelay/2;
+								else if (rateDelay > comm.JOIN_TIME_DELAY)
+									rateDelay = comm.JOIN_TIME_DELAY;
+							}
+							pingTime = -1;
 						} else {
 							if (pingTime != -1) {
 								data.putInt((comm.time()-timeAtPing) + pingTime);
-								System.out.println(comm.time() + "  " + timeAtPing + "  " + (comm.time()-timeAtPing));
 								pingTime = -1;
 							} else {
 								data.putInt(-1);
+								if (rateDelay < comm.JOIN_TIME_DELAY)
+									rateDelay += rateDelay/2;
+								else if (rateDelay > comm.JOIN_TIME_DELAY)
+									rateDelay = comm.JOIN_TIME_DELAY;
 							}
 						}
 						

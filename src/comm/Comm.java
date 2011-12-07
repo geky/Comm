@@ -44,9 +44,9 @@ public class Comm {
 
 	public final int JOIN_TIME_DELAY;
 	public final int SERVER_TIME_DELAY;
+	public final int TIME_BLOCK;
 	
 	protected volatile int fastDelay;
-	protected volatile int slowDelay;
 	
 	public final float RTT_ALPHA;
 	public final int RTT_TIMEOUT;
@@ -96,12 +96,12 @@ public class Comm {
 			DUMP_INFO = 0;
 		}
 		
-		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay","1000"));
-		fastDelay = Integer.parseInt(p.getProperty("time_fast_delay",""+JOIN_TIME_DELAY/4));
-		slowDelay = Integer.parseInt(p.getProperty("time_slow_delay",""+JOIN_TIME_DELAY/2));
-		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("time_delay",""+JOIN_TIME_DELAY*8));
+		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("join_time_delay","1000"));
+		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("server_time_delay",""+JOIN_TIME_DELAY*8));
+		fastDelay = Integer.parseInt(p.getProperty("time_delay_limit",""+JOIN_TIME_DELAY/4));
+		TIME_BLOCK = Integer.parseInt(p.getProperty("time_block",""+JOIN_TIME_DELAY/100));
 		RTT_ALPHA = Float.parseFloat(p.getProperty("rtt_alpha",""+0.875));
-		RTT_TIMEOUT = Integer.parseInt(p.getProperty("rtt_timeout",""+fastDelay));
+		RTT_TIMEOUT = Integer.parseInt(p.getProperty("rtt_timeout",""+JOIN_TIME_DELAY/4));
 		
 		String port = p.getProperty("default_port");
 		String portRange = p.getProperty("default_range");
@@ -154,12 +154,8 @@ public class Comm {
 		OFFSET_TIME = System.currentTimeMillis();
 	}
 	
-	public void setFastDelay(int d) {
+	public void setDelayLimit(int d) {
 		fastDelay = d;
-	}
-	
-	public void setSlowDelay(int d) {
-		slowDelay = d;
 	}
 	
 	public void start() {
