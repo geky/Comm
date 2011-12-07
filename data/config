@@ -10,4 +10,4 @@ dump_packets=true
 dump_info=0x21
 buffer_size=512
 join_time_delay=1000
-time_delay_limit=1
+time_delay_limit=10
