@@ -27,6 +27,7 @@ public class Comm {
 	public static final byte JOIN_ACK_FALSE_BYTE = 0x3f;
 	public static final byte DATA_BYTE = 0x40;
 	public static final byte EVENT_BYTE = 0x50;
+	public static final byte STREAM_REQUEST_BYTE = 0x52;
 	public static final byte KEEP_OPEN_BYTE = 0x0;
 	public static final byte SERVER_REQUEST_BYTE = 0x70;
 	public static final byte SERVER_REPLY_BYTE = 0x60;
@@ -44,9 +45,9 @@ public class Comm {
 
 	public final int JOIN_TIME_DELAY;
 	public final int SERVER_TIME_DELAY;
-	public final int TIME_BLOCK;
 	
 	protected volatile int fastDelay;
+	protected volatile int slowDelay;
 	
 	public final float RTT_ALPHA;
 	public final int RTT_TIMEOUT;
@@ -98,8 +99,8 @@ public class Comm {
 		
 		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("join_time_delay","1000"));
 		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("server_time_delay",""+JOIN_TIME_DELAY*8));
-		fastDelay = Integer.parseInt(p.getProperty("time_delay_limit",""+JOIN_TIME_DELAY/4));
-		TIME_BLOCK = Integer.parseInt(p.getProperty("time_block",""+JOIN_TIME_DELAY/100));
+		fastDelay = Integer.parseInt(p.getProperty("fast_delay_limit",""+JOIN_TIME_DELAY/40));
+		slowDelay = Integer.parseInt(p.getProperty("slow_delay_limit",""+JOIN_TIME_DELAY));
 		RTT_ALPHA = Float.parseFloat(p.getProperty("rtt_alpha",""+0.875));
 		RTT_TIMEOUT = Integer.parseInt(p.getProperty("rtt_timeout",""+JOIN_TIME_DELAY/4));
 		
@@ -395,7 +396,7 @@ public class Comm {
 				if (sender != null) {
 					sender.setData(b);
 					synchronized (sender) {
-						sender.setConnectionData(set,false);
+						sender.setConnectionData(set);
 						sender.reset();
 						sender.connect();
 					}
@@ -421,7 +422,7 @@ public class Comm {
 				}
 				
 				
-				temp.setConnectionData(set,false);
+				temp.setConnectionData(set);
 				
 				temp.reset();
 				temp.connect();
@@ -455,7 +456,7 @@ public class Comm {
 			con.setData(b);
 			
 			synchronized (con) {
-				con.setConnectionData(set,true);
+				con.setConnectionData(set);
 				
 				con.ackTrue();
 				con.connect();
@@ -503,10 +504,7 @@ public class Comm {
 				if (!con.isConnected())
 					con.reactivate(Comm.this);
 				
-				if (con.isMaster())
-					con.ping(b.getInt());
-				else
-					con.ping(b.getInt(),b.get());
+				con.ping();
 				
 				con.resolveEvents(bufferOfResolvedEventsToSendInReplyOfDataEventMask,b.getShort());
 			}

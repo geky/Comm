@@ -25,7 +25,6 @@ public abstract class Contact implements StatusObserver {
 	private Connect sender;
 	
 	private Set<Byte> plugins;
-	private boolean master;
 	
 	public Contact(Connection c) {
 		connection = c;
@@ -34,17 +33,12 @@ public abstract class Contact implements StatusObserver {
 	
 	public abstract void setData(ByteBuffer b);
 	
-	protected synchronized void setConnectionData(Set<Byte> set, boolean m) {
+	protected synchronized void setConnectionData(Set<Byte> set) {
 		plugins = set;
-		master = m;
 	}
 	
 	public synchronized Set<Byte> getPlugins() {
 		return plugins;
-	}
-
-	public synchronized boolean isMaster() { 
-		return master;
 	}
 	
 	public synchronized boolean isActive() {
@@ -142,21 +136,15 @@ public abstract class Contact implements StatusObserver {
 		status("waiting...");
 	}
 	
-	public synchronized void ping(int t) {
+	public synchronized void ping() {
 		if (sender != null)
-			sender.ping(t);
-	}
-	
-	public synchronized void ping(int t,byte r) {
-		if (sender != null)
-			sender.ping(t,r);
+			sender.ping();
 	}
 	
 	private class Connect extends Thread {
 		private final Comm comm;
-		private int pingTime = -1;
 		private int timeAtPing;
-		private int rtt = 0;
+		private boolean wasPinged = true;
 		private int rateDelay;
 		
 		private Connect(Comm comm) {
@@ -166,40 +154,7 @@ public abstract class Contact implements StatusObserver {
 		
 		public synchronized void ping() {
 			timeAtPing = comm.time();
-		}
-		
-		public synchronized void ping(int t) {
-			timeAtPing = comm.time();
-			pingTime = 0;
-			
-			if (t < 0) 
-				return;
-			
-			t = timeAtPing - t;
-			rtt = (int)((comm.RTT_ALPHA * rtt) + ((1-comm.RTT_ALPHA) * t));
-			
-			if (rtt > comm.RTT_TIMEOUT) {
-				System.out.println("AAAAAAAH");
-				rateDelay += rateDelay/2;
-				rtt = 0;
-			} else {
-				rateDelay -= comm.TIME_BLOCK;
-			}
-			
-			if (rateDelay < comm.TIME_BLOCK)
-				rateDelay = comm.TIME_BLOCK;
-			else if (rateDelay < comm.fastDelay)
-				rateDelay = comm.fastDelay;
-			
-			
-			
-			System.out.println(t + "  " + rtt + " : " + rateDelay);
-		}
-		
-		public synchronized void ping(int t,int r) {
-			timeAtPing = comm.time();
-			rateDelay = (r & 0xff) * comm.TIME_BLOCK;
-			pingTime = t;
+			wasPinged = true;
 		}
 		
 		public void run() {
@@ -237,8 +192,6 @@ public abstract class Contact implements StatusObserver {
 					} catch (InterruptedException e) {}
 				}
 				
-				boolean mastering = isMaster();
-				
 				while (isConnected()) {					
 					int tap;
 					synchronized (this) {
@@ -252,44 +205,37 @@ public abstract class Contact implements StatusObserver {
 					
 					ByteBuffer data = comm.makeBuffer();
 					data.put(Comm.DATA_BYTE);
-					data.position(mastering?6:5);
 					data.putShort(getEventMask());
 					comm.poll(Contact.this,data);
 					data.flip();
 					
-					data.position(1);
-					
 					int delay;
 					synchronized (this) {
-						if (mastering) {
-							data.putInt(comm.time());
-							data.put((byte)(rateDelay/comm.TIME_BLOCK));
-							if (pingTime < 0) {
-								if (rateDelay < comm.JOIN_TIME_DELAY)
-									rateDelay += rateDelay/2;
-								else if (rateDelay > comm.JOIN_TIME_DELAY)
-									rateDelay = comm.JOIN_TIME_DELAY;
-							}
-							pingTime = -1;
+						if (wasPinged) {
+							if (rateDelay > comm.fastDelay) {
+								rateDelay -= rateDelay/4;
+								
+								if (rateDelay < comm.fastDelay)
+									rateDelay = comm.fastDelay;
+							}	
 						} else {
-							if (pingTime != -1) {
-								data.putInt((comm.time()-timeAtPing) + pingTime);
-								pingTime = -1;
-							} else {
-								data.putInt(-1);
-								if (rateDelay < comm.JOIN_TIME_DELAY)
-									rateDelay += rateDelay/2;
-								else if (rateDelay > comm.JOIN_TIME_DELAY)
-									rateDelay = comm.JOIN_TIME_DELAY;
+							if (rateDelay < comm.slowDelay) {
+								rateDelay += rateDelay/2;
+								
+								if (rateDelay > comm.slowDelay)
+									rateDelay = comm.slowDelay;
 							}
 						}
 						
 						delay = rateDelay;
+						wasPinged = false;
+						
 					}
 					
 					comm.send(data,connection);
 				
 					try {
+						System.out.println(delay);
 						sleep(delay);
 					} catch (InterruptedException e) {}
 				}
