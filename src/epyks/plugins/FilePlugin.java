@@ -37,11 +37,6 @@ public class FilePlugin extends Plugin {
 		c.start();
 	}
 	
-	//This should only be used for small files. Otherwise you could end up flooding UDP, overflowing the event mask, or other bad things
-	public void sendFileAsEvents(File f,StatusObserver o) {
-		
-	}
-	
 	private class Compactor extends Thread {
 		StatusObserver o;
 		File f;

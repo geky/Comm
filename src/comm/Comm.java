@@ -9,6 +9,7 @@ import java.io.PrintStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -46,6 +47,8 @@ public class Comm {
 	public final int JOIN_TIME_DELAY;
 	public final int SERVER_TIME_DELAY;
 	
+	public final int DEFAULT_FAST_DELAY;
+	public final int DEFAULT_SLOW_DELAY;
 	protected volatile int fastDelay;
 	protected volatile int slowDelay;
 	
@@ -56,6 +59,7 @@ public class Comm {
 	
 	private final long OFFSET_TIME;
 	
+	private Object syncherLock = new Object();
 	private Thread syncher;
 	private boolean synched;
 	
@@ -99,8 +103,8 @@ public class Comm {
 		
 		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("join_time_delay","1000"));
 		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("server_time_delay",""+JOIN_TIME_DELAY*8));
-		fastDelay = Integer.parseInt(p.getProperty("fast_delay_limit",""+JOIN_TIME_DELAY/40));
-		slowDelay = Integer.parseInt(p.getProperty("slow_delay_limit",""+JOIN_TIME_DELAY));
+		DEFAULT_FAST_DELAY = fastDelay = Integer.parseInt(p.getProperty("default_fast_delay",""+JOIN_TIME_DELAY));
+		DEFAULT_SLOW_DELAY = slowDelay = Integer.parseInt(p.getProperty("default_slow_delay",""+JOIN_TIME_DELAY));
 		RTT_ALPHA = Float.parseFloat(p.getProperty("rtt_alpha",""+0.875));
 		RTT_TIMEOUT = Integer.parseInt(p.getProperty("rtt_timeout",""+JOIN_TIME_DELAY/4));
 		
@@ -153,10 +157,10 @@ public class Comm {
 		NPSERVER_KEEP_OPEN = npunused;
 		
 		OFFSET_TIME = System.currentTimeMillis();
-	}
-	
-	public void setDelayLimit(int d) {
-		fastDelay = d;
+		
+		for (Usage uu:u.values()) {
+			uu.setComm(this);
+		}
 	}
 	
 	public void start() {
@@ -164,8 +168,10 @@ public class Comm {
 		synch();
 	}
 	
-	public synchronized boolean isSynched() {
-		return synched;
+	public boolean isSynched() {
+		synchronized (syncherLock) {
+			return synched;
+		}
 	}
 	
 	private class ServerThread extends Thread {
@@ -192,12 +198,12 @@ public class Comm {
 						InetAddress me = InetAddress.getLocalHost();
 						c = new Connection(me,SOCKET.getLocalPort());
 						source.setOwnerConnection(c,false);
-						synchronized (Comm.this) {
+						synchronized (syncherLock) {
 							synched = true;
 						}
 					} catch (Exception e) {
 						source.error("Couldn't obtain IP");
-						synchronized (Comm.this) {
+						synchronized (syncherLock) {
 							synched = false;
 							syncher = null;
 						}
@@ -219,18 +225,37 @@ public class Comm {
 		}		
 	}
 	
-	public synchronized void synch() {
-		synched = false;
-		if (syncher == null) {
-			syncher = new ServerThread();
-			syncher.start();
-		} else {
-			syncher.interrupt();
+	public void synch() {
+		synchronized (syncherLock) {
+			synched = false;
+			if (syncher == null) {
+				syncher = new ServerThread();
+				syncher.start();
+			} else {
+				syncher.interrupt();
+			}
 		}
 	}
 	
 	public ByteBuffer makeBuffer() {
 		return ByteBuffer.allocate(BUFFER_SIZE);
+	}
+	
+	public void updateRateDelay() {
+		int min = DEFAULT_FAST_DELAY;
+		int max = DEFAULT_SLOW_DELAY;
+		int t;
+		for (Usage u:uses.values()) {
+			t = u.getMaximumRateDelay();
+			if (t >= 0 && t < max)
+				max = t;
+			t = u.getMinimumRateDelay();
+			if (t >= 0 && t < min)
+				min = t;
+		}
+		
+		slowDelay = max;
+		fastDelay = min;
 	}
 	
 	public Event makeEvent(byte usage) {
@@ -292,7 +317,7 @@ public class Comm {
 				case KEEP_OPEN_BYTE: DUMP_STREAM.print("KEEP_OPEN "); break;
 				case NAT_WORKAROUND_REQUEST_BYTE : DUMP_STREAM.print("NAT_WORKAROUND_REQUEST "); break;
 				case NAT_WORKAROUND_FORWARD_BYTE : DUMP_STREAM.print("NAT_WORKAROUND_FORWARD "); break;
-				default: throw new RuntimeException("BAD_INTENT");//System.out.print("BAD_INTENT "); break;
+				default: DUMP_STREAM.print("BAD_INTENT "); break;
 			}
 		}
 		if ((DUMP_INFO & 0x2) != 0) DUMP_STREAM.print("L" + len + " "); 
@@ -530,7 +555,7 @@ public class Comm {
 		
 		private void serverReply(ByteBuffer b, Connection c) {
 			try {
-				synchronized (this) {
+				synchronized (syncherLock) {
 					synched = true;
 					syncher.interrupt();
 				}

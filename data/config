@@ -10,4 +10,5 @@ dump_packets=false
 dump_info=0x21
 buffer_size=512
 join_time_delay=1000
-fast_delay_limit=25
+default_fast_delay=1000
+default_slow_delay=2000

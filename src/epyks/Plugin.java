@@ -19,8 +19,12 @@ public abstract class Plugin extends JComponent implements Usage {
 	public void doData(Contact s, ByteBuffer b) {}
 	@Override
 	public void doEvent(Contact s, Event e) {}
-	
-	public void setComm(Comm c) {}	
+	@Override
+	public void setComm(Comm c) {}
+	@Override
+	public int getMinimumRateDelay() {return -1;}
+	@Override
+	public int getMaximumRateDelay() {return -1;}
 	
 	public JPanel settings(Properties p) {return null;}
 }

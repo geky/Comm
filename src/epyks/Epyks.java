@@ -170,10 +170,6 @@ public class Epyks extends JFrame implements ContactControl {
 			System.err.println("Failed to create Sockets");
 		}
 		comm.start();
-
-		for (Plugin p : plugins.values()) {
-			p.setComm(comm);
-		}
 	}
 
 	
