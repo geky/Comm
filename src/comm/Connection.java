@@ -69,7 +69,7 @@ public class Connection {
 	}
 	
 	public int hashCode() {
-		return address.hashCode();
+		return address.hashCode() ^ port;
 	}
 	
 	public boolean equals(Object o) {

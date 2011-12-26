@@ -1,28 +1,44 @@
 package epyks;
 
 import java.awt.Color;
-import java.io.File;
-import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashSet;
+import java.util.Set;
 
-import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
 import javax.swing.SwingUtilities;
 
 import comm.Connection;
 import comm.Contact;
+import comm.StatusListener;
 
-public class Peer extends Contact {
+public class Peer extends Contact implements StatusListener {
 
 	public final PeerPanel panel;
 	
 	private String name;
 	private ImageIcon pic;
 	
-	public Peer(Connection c, Epyks e) {
-		super(c);
-		panel = new PeerPanel(e);
+	private Set<Byte> plugins;
+	
+	public Peer(Connection c, Epyks e, PeerPanel p) {
+		super(c,p);
+		name = c.toString();
+		panel = p;
 		panel.makeLostPanel(null, c);
+	}
+	
+	public void setInit(String n, HashSet<Byte> s) {
+		name = n;
+		plugins = s;
+	}
+	
+	public String getName() {
+		return name;
+	}
+
+	public ImageIcon getIcon() {
+		return pic;
 	}
 
 	@Override
@@ -36,7 +52,7 @@ public class Peer extends Contact {
 	}
 
 	@Override
-	public void connect() {
+	public void join() {
 		SwingUtilities.invokeLater(
 				new Runnable() {
 					public void run() {
@@ -59,15 +75,5 @@ public class Peer extends Contact {
 					}
 				}
 			);
-	}
-
-	@Override
-	public void setData(ByteBuffer b) {
-		byte[] temp = new byte[b.get()];
-		b.get(temp);
-		
-		synchronized (this) {
-			name = new String(temp);
-		}
 	}
 }

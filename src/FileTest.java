@@ -1,10 +1,10 @@
 import java.io.File;
 
-import comm.StatusObserver;
+import comm.StatusListener;
 import epyks.plugins.FilePlugin;
 
 
-public class FileTest implements StatusObserver {
+public class FileTest implements StatusListener {
 	public static void main(String[] args) {
 		File f = new File(args[0]);
 		System.out.println("Using:" + f.toString());

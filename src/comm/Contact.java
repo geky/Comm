@@ -11,7 +11,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.Map.Entry;
 
-public abstract class Contact implements StatusObserver {
+public class Contact {
 
 	public final Connection connection;
 	
@@ -22,24 +22,30 @@ public abstract class Contact implements StatusObserver {
 	private final Event[] events;
 
 	private boolean connected = false;
-	private Connect sender;
+	private ConnectThread sender;
 	
-	private Set<Byte> plugins;
+	//private Set<Byte> plugins;
+	private final StatusListener stat;
 	
 	public Contact(Connection c) {
+		this(c,null);
+	}
+	
+	public Contact(Connection c, StatusListener st) {
 		connection = c;
+		stat = st;
 		events = new Event[Short.SIZE];
 	}
 	
-	public abstract void setData(ByteBuffer b);
-	
-	protected synchronized void setConnectionData(Set<Byte> set) {
-		plugins = set;
-	}
-	
-	public synchronized Set<Byte> getPlugins() {
-		return plugins;
-	}
+//	public abstract void setData(ByteBuffer b);
+//	
+//	protected synchronized void setConnectionData(Set<Byte> set) {
+//		plugins = set;
+//	}
+//	
+//	public synchronized Set<Byte> getPlugins() {
+//		return plugins;
+//	}
 	
 	public synchronized boolean isActive() {
 		return sender != null;
@@ -49,9 +55,9 @@ public abstract class Contact implements StatusObserver {
 		return connected;
 	}
 	
-	public abstract void connect();
-	
-	public abstract void lose();
+	//Overload these to observe changes to connection state
+	public void join() {};
+	public void lose() {};
 	
 	public synchronized void reset() {
 		nextEventBit = 0;
@@ -87,17 +93,15 @@ public abstract class Contact implements StatusObserver {
 	public synchronized short getEventMask() {
 		return eventMaskR;
 	}
-	
-	//if you overload this,
-	//try not to break anything...
+
 	public synchronized void join(Comm c) {
-		status("resolving...");
+		if (stat != null) stat.status("resolving...");
 		
 		lose();
 		reset();
 		
 		if (sender == null) {
-			sender = new Connect(c);
+			sender = new ConnectThread(c);
 			sender.start();
 		} else {
 			sender.interrupt();
@@ -106,12 +110,11 @@ public abstract class Contact implements StatusObserver {
 	
 	public synchronized void reactivate(Comm c) {
 		connected = true;
-		connect();
-		
 		if (sender == null) {
-			sender = new Connect(c);
+			sender = new ConnectThread(c);
 			sender.start();
 		}
+		join();
 	}
 	
 	public synchronized void deactivate() {
@@ -129,11 +132,12 @@ public abstract class Contact implements StatusObserver {
 			sender.ping();
 			sender.interrupt();
 		}
+		join();
 	}
 	
 	public synchronized void ackFalse() {
 		deactivate();
-		status("waiting...");
+		if (stat != null) stat.status("waiting...");
 	}
 	
 	public synchronized void ping() {
@@ -141,13 +145,13 @@ public abstract class Contact implements StatusObserver {
 			sender.ping();
 	}
 	
-	private class Connect extends Thread {
+	private class ConnectThread extends Thread {
 		private final Comm comm;
 		private int timeAtPing;
 		private boolean wasPinged = true;
 		private int rateDelay;
 		
-		private Connect(Comm comm) {
+		private ConnectThread(Comm comm) {
 			this.comm = comm;
 			rateDelay = comm.fastDelay;
 		}
@@ -161,28 +165,19 @@ public abstract class Contact implements StatusObserver {
 			while (isActive()) {
 				if (!isConnected()) {
 					try {
-						String attempt = "joining....";
-						ByteBuffer joinPacket = comm.makeBuffer();
-						joinPacket.put(Comm.JOIN_BYTE);
-						comm.getData(joinPacket);
-						joinPacket.flip();
+						ByteBuffer joinPacket = comm.makeJoinRequest();
 						
 						for (int t=0; t<4; t++) {
-							status(attempt.substring(0, attempt.length()-3+t));
+							if (stat != null) stat.status("joining...".substring(0, 7+t));
 							comm.send(joinPacket,connection);
 							
 							Thread.sleep(comm.JOIN_TIME_DELAY);
 						}
 						
-						attempt = "workaround....";
-						ByteBuffer waPacket = comm.makeBuffer();
-						waPacket.put(Comm.NAT_WORKAROUND_REQUEST_BYTE);
-						connection.toBytes(waPacket);
-						comm.getData(waPacket);
-						waPacket.flip();
+						ByteBuffer waPacket = comm.makeWorkaroundRequest(connection);
 						
 						for (int t=0; t<4; t++) {
-							status(attempt.substring(0, attempt.length()-3+t));
+							if (stat != null) stat.status("workaround...".substring(0, 10+t));
 							comm.send(waPacket,comm.NPSERVER);
 							
 							Thread.sleep(comm.JOIN_TIME_DELAY);
@@ -203,11 +198,7 @@ public abstract class Contact implements StatusObserver {
 						break;
 					}
 					
-					ByteBuffer data = comm.makeBuffer();
-					data.put(Comm.DATA_BYTE);
-					data.putShort(getEventMask());
-					comm.poll(Contact.this,data);
-					data.flip();
+					ByteBuffer data = comm.makeDataPoll(Contact.this);
 					
 					int delay;
 					synchronized (this) {
@@ -229,17 +220,16 @@ public abstract class Contact implements StatusObserver {
 						
 						delay = rateDelay;
 						wasPinged = false;
-						
 					}
 					
 					comm.send(data,connection);
 				
 					try {
-						System.out.println(delay);
 						sleep(delay);
 					} catch (InterruptedException e) {}
 				}
 			}
 		}
 	}
+
 }

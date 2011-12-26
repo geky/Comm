@@ -34,8 +34,9 @@ import javax.swing.SwingUtilities;
 
 import comm.Connection;
 import comm.Contact;
+import comm.StatusListener;
 
-public class PeerPanel extends JPanel {
+public class PeerPanel extends JPanel implements StatusListener {
 	
 	public static final ImageIcon DEFAULT_PIC;
 	
@@ -260,6 +261,16 @@ public class PeerPanel extends JPanel {
 				}
 			}
 		);
+	}
+
+	@Override
+	public void status(String s) {
+		message(s,Color.BLACK);
+	}
+
+	@Override
+	public void error(String s) {
+		message(s,Color.RED);
 	}
 	
 //	private class Exit implements ActionListener {

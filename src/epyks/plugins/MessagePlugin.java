@@ -53,7 +53,8 @@ public class MessagePlugin extends Plugin implements ActionListener {
 
 	@Override
 	public void actionPerformed(ActionEvent e) {
-		Event to = comm.makeEvent(usage());
+		Event to = comm.makeEvent();
+		to.buffer.put(usage());
 		to.buffer.put(field.getText().getBytes());
 		to.buffer.flip();
 		comm.sendEvent(to);

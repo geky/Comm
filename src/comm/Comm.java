@@ -63,15 +63,23 @@ public class Comm {
 	private Thread syncher;
 	private boolean synched;
 	
-	private final ContactControl source;
+	private final Communicable source;
+	private final StatusListener stat;
 	private final Map<Connection,Contact> contacts = new HashMap<Connection,Contact>();
 	
-	private final Map<Byte,? extends Usage> uses;
+	//private final Map<Byte,? extends Usage> uses;
 	
-	public Comm(ContactControl cm, Map<Byte,? extends Usage> u, Properties p) throws SocketException {
+	public Comm(Communicable cm) throws SocketException {
+		this(cm,null,null);
+	}
+	
+	public Comm(Communicable cm, StatusListener st) throws SocketException {
+		this(cm,st,null);
+	}
+	
+	public Comm(Communicable cm, StatusListener st, Properties p) throws SocketException {
 		source = cm;
-		
-		uses = Collections.unmodifiableMap(u);
+		stat = st;
 		
 		BUFFER_SIZE = Integer.parseInt(p.getProperty("buffer_size","512"));
 		DUMP_PACKETS = Boolean.parseBoolean(p.getProperty("dump_packets", "false"));
@@ -157,10 +165,6 @@ public class Comm {
 		NPSERVER_KEEP_OPEN = npunused;
 		
 		OFFSET_TIME = System.currentTimeMillis();
-		
-		for (Usage uu:u.values()) {
-			uu.setComm(this);
-		}
 	}
 	
 	public void start() {
@@ -178,21 +182,19 @@ public class Comm {
 		public void run() {
 			while (true) {
 				try {
-					String attempt = "synching....";
-					ByteBuffer request = makeBuffer();
-					request.put(SERVER_REQUEST_BYTE).flip();
+					ByteBuffer request = makeServerRequest();
 					
 					for (int t=0; t<4; t++) {
-						source.status(attempt.substring(0, attempt.length()-3+t));
+						if (stat != null) stat.status("synching...".substring(0, 8+t));
 						send(request,NPSERVER);
 						
 						Thread.sleep(JOIN_TIME_DELAY);
 					}
 				
 					Connection c;
-					source.status("guessing...");
+					if (stat != null) stat.status("guessing...");
 					
-					sleep(1000);
+					Thread.sleep(JOIN_TIME_DELAY);
 					
 					try {
 						InetAddress me = InetAddress.getLocalHost();
@@ -202,7 +204,7 @@ public class Comm {
 							synched = true;
 						}
 					} catch (Exception e) {
-						source.error("Couldn't obtain IP");
+						if (stat != null) stat.error("Couldn't obtain IP");
 						synchronized (syncherLock) {
 							synched = false;
 							syncher = null;
@@ -211,12 +213,10 @@ public class Comm {
 					}
 				} catch (InterruptedException e) {}
 				
+				
+				ByteBuffer ko = makeKeepOpen();
 				while (isSynched()) {
-					ByteBuffer data = makeBuffer();
-					data.put(KEEP_OPEN_BYTE);
-					data.flip();
-					send(data,NPSERVER_KEEP_OPEN);
-					
+					send(ko,NPSERVER_KEEP_OPEN);
 					try {
 						Thread.sleep(SERVER_TIME_DELAY);
 					} catch (InterruptedException e) {}
@@ -237,29 +237,90 @@ public class Comm {
 		}
 	}
 	
+	//TODO mess with this
+	public void setFastDelay(int d) {
+		fastDelay = d;
+	}
+	
+	public void setSlowDelay(int d) {
+		slowDelay = d;
+	}
+	
+//	public void updateRateDelay() {
+//		int min = DEFAULT_FAST_DELAY;
+//		int max = DEFAULT_SLOW_DELAY;
+//		int t;
+//		for (Usage u:uses.values()) {
+//			t = u.getMaximumRateDelay();
+//			if (t >= 0 && t < max)
+//				max = t;
+//			t = u.getMinimumRateDelay();
+//			if (t >= 0 && t < min)
+//				min = t;
+//		}
+//		
+//		slowDelay = max;
+//		fastDelay = min;
+//	}
+
 	public ByteBuffer makeBuffer() {
 		return ByteBuffer.allocate(BUFFER_SIZE);
 	}
 	
-	public void updateRateDelay() {
-		int min = DEFAULT_FAST_DELAY;
-		int max = DEFAULT_SLOW_DELAY;
-		int t;
-		for (Usage u:uses.values()) {
-			t = u.getMaximumRateDelay();
-			if (t >= 0 && t < max)
-				max = t;
-			t = u.getMinimumRateDelay();
-			if (t >= 0 && t < min)
-				min = t;
-		}
-		
-		slowDelay = max;
-		fastDelay = min;
+	public Event makeEvent() {
+		return new Event(BUFFER_SIZE);
 	}
 	
-	public Event makeEvent(byte usage) {
-		return new Event(usage, BUFFER_SIZE-3, Event.NORM_PRIORITY);
+	protected ByteBuffer makeJoinRequest() {
+		ByteBuffer joinPacket = makeBuffer();
+		joinPacket.put(JOIN_BYTE);
+		source.getInitData(joinPacket);
+		joinPacket.flip();
+		return joinPacket;
+	}
+	
+	protected ByteBuffer makeWorkaroundRequest(Connection c) {
+		ByteBuffer waPacket = makeBuffer();
+		waPacket.put(NAT_WORKAROUND_REQUEST_BYTE);
+		c.toBytes(waPacket);
+		source.getInitData(waPacket);
+		waPacket.flip();
+		return waPacket;
+	}
+	
+	protected ByteBuffer makeJoinAckTrue() {
+		ByteBuffer reply = makeBuffer();
+		reply.put(JOIN_ACK_TRUE_BYTE);
+		source.getInitData(reply);
+		reply.flip();
+		return reply;
+	}
+	
+	protected ByteBuffer makeJoinAckFalse() {
+		ByteBuffer reply = makeBuffer();
+		reply.put(JOIN_ACK_FALSE_BYTE).flip();
+		return reply;
+	}
+	
+	protected ByteBuffer makeServerRequest() {
+		ByteBuffer request = makeBuffer();
+		request.put(SERVER_REQUEST_BYTE).flip();
+		return request;
+	}
+	
+	protected ByteBuffer makeKeepOpen() {
+		ByteBuffer data = makeBuffer();
+		data.put(KEEP_OPEN_BYTE).flip();
+		return data;
+	}
+	
+	protected ByteBuffer makeDataPoll(Contact c) {
+		ByteBuffer data = makeBuffer();
+		data.put(Comm.DATA_BYTE);
+		data.putShort(c.getEventMask());
+		source.pollData(c,data);
+		data.flip();
+		return data;
 	}
 	
 	public void send(ByteBuffer b) {
@@ -330,23 +391,6 @@ public class Comm {
 		}
 	}
 	
-	
-	public void getData(ByteBuffer data) {
-		for (byte byt:uses.keySet()) {
-			data.put(byt);
-		}
-		data.put((byte)0x0);
-		source.getData(data);
-	}
-	
-	protected void poll(Contact c, ByteBuffer b) {
-		for (byte byt:c.getPlugins()) {
-			uses.get(byt).pollData(c,b);
-		}
-		if (b.hasRemaining())
-			b.put((byte)0x0);
-	}
-	
 	public int time() {
 		return (int)(System.currentTimeMillis() - OFFSET_TIME);
 	}
@@ -361,7 +405,8 @@ public class Comm {
 	
 	public void remove(Contact c) {
 		synchronized (contacts) {
-			contacts.remove(c.connection).deactivate();
+			Contact con = contacts.remove(c.connection);
+			if (con != null) con.deactivate();
 		}
 	}
 	
@@ -408,59 +453,25 @@ public class Comm {
 		
 		private void join(ByteBuffer b, Connection c) {
 			
-			HashSet<Byte> set = new HashSet<Byte>(uses.size());
-			for (byte byt = b.get(); byt != 0x0; byt = b.get()) {
-				if (uses.containsKey(byt))
-					set.add(byt);
-			}
-			
 			Contact sender;
-			synchronized (contacts) {
+			synchronized(contacts) {
 				sender = contacts.get(c);
+			}	
 			
-				if (sender != null) {
-					sender.setData(b);
-					synchronized (sender) {
-						sender.setConnectionData(set);
-						sender.reset();
-						sender.connect();
-					}
-					
-					ByteBuffer reply = makeBuffer();
-					reply.put(JOIN_ACK_TRUE_BYTE);
-					getData(reply);
-					reply.flip();
-					
-					send(reply,c);
-					
-					return;
+			if (sender != null) {
+				synchronized (sender) {
+					sender.reset();
+					sender.reactivate(Comm.this);
 				}
 				
-						
-				Contact temp = source.makeContact(c,b);
-				
-				if (temp == null) {
-					ByteBuffer reply = makeBuffer();
-					reply.put(JOIN_ACK_FALSE_BYTE).flip();
-					send(reply,c);
-					return;
-				}
-				
-				
-				temp.setConnectionData(set);
-				
-				temp.reset();
-				temp.connect();
-				contacts.put(c, temp);
-				
-				ByteBuffer reply = makeBuffer();
-				reply.put(JOIN_ACK_TRUE_BYTE);
-				getData(reply);
-				reply.flip();
+				ByteBuffer reply = makeJoinAckTrue();					
 				send(reply,c);
+			} else {
+				source.makeContact(c,b);
 				
-				return;
-			}		
+				ByteBuffer reply = makeJoinAckFalse();
+				send(reply,c);
+			}
 		}
 		
 		private void joinAckTrue(ByteBuffer b, Connection c) {			
@@ -472,20 +483,8 @@ public class Comm {
 			if (con == null)
 				return;
 			
-			HashSet<Byte> set = new HashSet<Byte>(uses.size());
-			for (byte byt = b.get(); byt != 0x0; byt = b.get()) {
-				if (uses.containsKey(byt))
-					set.add(byt);
-			}
-			
-			con.setData(b);
-			
-			synchronized (con) {
-				con.setConnectionData(set);
-				
-				con.ackTrue();
-				con.connect();
-			}
+			source.ackContact(con, b);
+			con.ackTrue();
 		}
 		
 		private void joinAckFalse(ByteBuffer b, Connection c) {
@@ -511,11 +510,11 @@ public class Comm {
 			
 			Event e = new Event(b);
 			
-			if (con.collideEvent(e)) 
-				uses.get(e.usage).doEvent(con,e);
+			if (con.collideEvent(e))
+				source.doEvent(con,e);
 		}
 		
-		private List<Event> bufferOfResolvedEventsToSendInReplyOfDataEventMask = new ArrayList<Event>();
+		private List<Event> bufferOfResolvedEventsToSendInReplyOfDataEventMask = new ArrayList<Event>(Short.SIZE);
 		
 		private void data(ByteBuffer b, Connection c) {
 			Contact con;
@@ -539,15 +538,13 @@ public class Comm {
 			}
 			bufferOfResolvedEventsToSendInReplyOfDataEventMask.clear();
 			
-			byte usage;
-			while (b.hasRemaining() && (usage = b.get()) != 0x0) {
-				uses.get(usage).doData(con,b);
-			}
+			source.doData(con, b);
 		}
 		
 		private void serverRequest(ByteBuffer b, Connection c) { 
 			//sure why not let the app run as a server, don't actually know what will happen in this case
-			ByteBuffer temp = makeBuffer().put(SERVER_REPLY_BYTE);
+			ByteBuffer temp = makeBuffer();
+			temp.put(SERVER_REPLY_BYTE);
 			c.toBytes(temp);
 			temp.flip();
 			send(temp,c);
@@ -563,7 +560,7 @@ public class Comm {
 				
 				source.setOwnerConnection(i,true);
 			} catch (UnknownHostException e) {
-				source.error("Unusable IP?");
+				if (stat != null) stat.error("Unusable IP?");
 				e.printStackTrace();
 			}
 		}

@@ -10,7 +10,7 @@ import java.util.zip.ZipOutputStream;
 
 import comm.Contact;
 import comm.Event;
-import comm.StatusObserver;
+import comm.StatusListener;
 
 import epyks.Plugin;
 
@@ -30,7 +30,7 @@ public class FilePlugin extends Plugin {
 		return 0x0F;
 	}
 	
-	public void sendFile(File f,StatusObserver o)  {
+	public void sendFile(File f,StatusListener o)  {
 		
 		//TODO
 		Compactor c = new Compactor(f,null,o);
@@ -38,10 +38,10 @@ public class FilePlugin extends Plugin {
 	}
 	
 	private class Compactor extends Thread {
-		StatusObserver o;
+		StatusListener o;
 		File f;
 		
-		Compactor(File f, Runnable r, StatusObserver o) {
+		Compactor(File f, Runnable r, StatusListener o) {
 			super(r);
 			this.o = o;
 			this.f = f;

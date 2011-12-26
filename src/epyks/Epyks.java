@@ -15,8 +15,11 @@ import java.io.IOException;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Properties;
 import java.util.Scanner;
 
@@ -26,7 +29,6 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
-import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -38,12 +40,13 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
 import comm.Comm;
+import comm.Communicable;
 import comm.Connection;
 import comm.Contact;
-import comm.ContactControl;
 import comm.Event;
+import comm.StatusListener;
 
-public class Epyks extends JFrame implements ContactControl {
+public class Epyks extends JFrame implements Communicable,StatusListener {
 
 	public static void main(String[] args) {
 		try {
@@ -62,7 +65,8 @@ public class Epyks extends JFrame implements ContactControl {
 	private JPanel peersPanel;
 	private JPanel pendingPeersPanel;
 	private final Map<Connection, Peer> peers;
-	private final Map<Connection, PeerPanel> pendingPeers;
+	
+	private final Map<Byte,Plugin> plugs;
 
 	private Comm comm;
 
@@ -80,6 +84,12 @@ public class Epyks extends JFrame implements ContactControl {
 		} catch (IOException e) {
 			System.err.println("IOException reading config!");
 		}
+		
+		try {
+			comm = new Comm(this,this,props);
+		} catch (SocketException e) {
+			System.err.println("Failed to create Sockets");
+		}
 
 		settings = new Settings(props);
 
@@ -95,12 +105,13 @@ public class Epyks extends JFrame implements ContactControl {
 				Plugin next;
 
 				try {
-					next = (Plugin) source.loadClass(nextName).newInstance();
+					next = (Plugin)source.loadClass(nextName).newInstance();
 				} catch (Exception e) {
 					System.err.println("Could not find plugin " + nextName);
 					continue;
 				}
 				
+				next.setComm(comm);
 				settings.add(next.settings(props));
 				plugins.put(next.usage(), next);
 				jtp.add(next);
@@ -112,6 +123,8 @@ public class Epyks extends JFrame implements ContactControl {
 			plugins.put(settings.usage(), settings);
 			jtp.add(settings);
 		}
+		
+		plugs = Collections.unmodifiableMap(plugins);
 
 		jtp.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
@@ -128,7 +141,7 @@ public class Epyks extends JFrame implements ContactControl {
 		jadd.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
 		peers = new HashMap<Connection, Peer>();
-		pendingPeers = new HashMap<Connection, PeerPanel>();
+		//pendingPeers = new HashMap<Connection, PeerPanel>();
 
 		pendingPeersPanel = new JPanel();
 		pendingPeersPanel.setLayout(new BoxLayout(pendingPeersPanel, BoxLayout.Y_AXIS));
@@ -164,48 +177,60 @@ public class Epyks extends JFrame implements ContactControl {
 		pack();
 		setVisible(true);
 
-		try {
-			comm = new Comm(this, plugins, props);
-		} catch (SocketException e) {
-			System.err.println("Failed to create Sockets");
-		}
 		comm.start();
 	}
 
 	
 
 	@Override
-	public Contact makeContact(Connection c, ByteBuffer b) {
+	public void makeContact(Connection c, ByteBuffer b) {
 		synchronized (peers) {
-			Contact ret = peers.get(c);
-			if (ret != null) {
-				ret.setData(b);
-				return ret;
-			}
-
-			if (!pendingPeers.containsKey(c)) {
-				byte[] temp = new byte[b.get()];
-				b.get(temp);
-				String name = new String(temp);
-				
-				final PeerPanel pending = new PeerPanel(this);
-				pending.makePendingPanel(name,c);
-				pendingPeers.put(c, pending);
-
+			Peer noob = peers.get(c);
+			
+			if (noob == null) {
+				final PeerPanel pending = new PeerPanel(this);				
+				Peer p = new Peer(c, this, pending);
+				ackContact(p,b);
+				final String name = p.getName();
+				final Connection con = p.connection;
+				peers.put(c,p);
+	
 				SwingUtilities.invokeLater(new Runnable() {
 					public void run() {
+						pending.makePendingPanel(name, con);
 						pendingPeersPanel.add(pending);
 						pendingPeersPanel.revalidate();
 						pendingPeersPanel.repaint();
 					}
 				});
+			} else {
+				ackContact(noob,b);
 			}
-			return null;
 		}
 	}
 	
 	@Override
-	public void getData(ByteBuffer b) {
+	public void ackContact(Contact s, ByteBuffer b) {
+		HashSet<Byte> set = new HashSet<Byte>(plugs.size());
+		for (byte byt = b.get(); byt != 0x0; byt = b.get()) {
+			if (plugs.containsKey(byt))
+				set.add(byt);
+		}
+		
+		byte[] temp = new byte[b.get()];
+		b.get(temp);
+		String name = new String(temp);
+		
+		((Peer)s).setInit(name,set);
+	}
+	
+	@Override
+	public void getInitData(ByteBuffer b) {
+		for (byte byt:plugs.keySet()) {
+			b.put(byt);
+		}
+		b.put((byte)0x0);
+		
 		String name = settings.getUserName();
 		b.put((byte)name.length());
 		b.put(name.getBytes());
@@ -225,6 +250,30 @@ public class Epyks extends JFrame implements ContactControl {
 	public void setOwnerConnection(Connection c,boolean checked) {
 		settings.setConnection(c,checked);
 	}
+	
+	
+	@Override
+	public void pollData(Contact s, ByteBuffer b) {
+		for (Entry<Byte,Plugin> e:plugs.entrySet()) {
+			b.put(e.getKey());
+			e.getValue().pollData(s,b);
+		}
+		if (b.hasRemaining())
+			b.put((byte)0x0);
+	}
+
+	@Override
+	public void doData(Contact s, ByteBuffer b) {
+		for (byte usage = b.get(); b.hasRemaining() && usage != 0x0; usage = b.get()) {
+			plugs.get(usage).doData(s,b);
+		}
+	}
+	
+	@Override
+	public void doEvent(Contact s, Event e) {
+		plugs.get(e.buffer.get()).doEvent(s, e);
+	}
+
 
 	public class Remover implements ActionListener {
 		Connection owner;
@@ -237,21 +286,13 @@ public class Epyks extends JFrame implements ContactControl {
 			Peer peer;
 			synchronized (peers) {
 				peer = peers.remove(owner);
-				if (peer != null) {
-					peersPanel.remove(peer.panel);
-					peersPanel.revalidate();
-					peersPanel.repaint();
-				} else {
-					PeerPanel pending = pendingPeers.remove(owner);
-					if (pending != null) {
-						pendingPeersPanel.remove(pending);
-						pendingPeersPanel.revalidate();
-						pendingPeersPanel.repaint();
-					}
-					return;
-				}
+				pendingPeersPanel.remove(peer.panel);
+				peersPanel.remove(peer.panel);
+				pendingPeersPanel.revalidate();
+				peersPanel.revalidate();
+				pendingPeersPanel.repaint();
+				peersPanel.repaint();
 			}
-
 			comm.remove(peer);
 		}
 	}
@@ -267,21 +308,22 @@ public class Epyks extends JFrame implements ContactControl {
 			String ip = source.getText();
 			source.setText("");
 
-			Peer p;
+			Connection c;
 			try {
-				Connection to = new Connection(ip, comm.DEFAULT_PORT);
-				p = new Peer(to, Epyks.this);
+				c = new Connection(ip, comm.DEFAULT_PORT);
 			} catch (UnknownHostException e) {
 				System.err.println("Bad Address");
 				return;
 			}
 
+			Peer p;
 			synchronized (peers) {
-				if (peers.containsKey(p.connection)) {
+				if (peers.containsKey(c)) {
 					System.err.println("Duplicate Contact");
 					return;
 				} else {
-					peers.put(p.connection, p);
+					p = new Peer(c, Epyks.this, new PeerPanel(Epyks.this));
+					peers.put(c, p);
 					peersPanel.add(p.panel);
 					peersPanel.revalidate();
 					peersPanel.repaint();
@@ -324,17 +366,17 @@ public class Epyks extends JFrame implements ContactControl {
 		}
 
 		public void actionPerformed(ActionEvent arg0) {
-			Peer p = new Peer(owner, Epyks.this);
+			Peer p;
+			synchronized (peers) {
+				p = peers.get(owner);
+			}
 
 			synchronized (peers) {
-				PeerPanel temp = pendingPeers.remove(owner);
-				pendingPeersPanel.remove(temp);
-				pendingPeersPanel.revalidate();
-				pendingPeersPanel.repaint();
-
-				peers.put(owner, p);
+				pendingPeersPanel.remove(p.panel);
 				peersPanel.add(p.panel);
+				pendingPeersPanel.revalidate();
 				peersPanel.revalidate();
+				pendingPeersPanel.repaint();
 				peersPanel.repaint();
 			}
 
@@ -515,8 +557,9 @@ public class Epyks extends JFrame implements ContactControl {
 				user.setName(n);
 				
 				
-				Event e = new Event(usage(),n.length()+1,Event.NORM_PRIORITY);
-				e.buffer.put((byte) n.length());
+				Event e = comm.makeEvent();
+				e.buffer.put(usage());
+				e.buffer.put((byte)n.length());
 				e.buffer.put(n.getBytes());
 				e.buffer.flip();
 				comm.sendEvent(e);
