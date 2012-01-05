@@ -153,7 +153,7 @@ public class Contact {
 		
 		private ConnectThread(Comm comm) {
 			this.comm = comm;
-			rateDelay = comm.fastDelay;
+			rateDelay = comm.getFastDelay();
 		}
 		
 		public synchronized void ping() {
@@ -174,13 +174,15 @@ public class Contact {
 							Thread.sleep(comm.JOIN_TIME_DELAY);
 						}
 						
-						ByteBuffer waPacket = comm.makeWorkaroundRequest(connection);
-						
-						for (int t=0; t<4; t++) {
-							if (stat != null) stat.status("workaround...".substring(0, 10+t));
-							comm.send(waPacket,comm.NPSERVER);
+						if (comm.NPSERVER != null) {
+							ByteBuffer waPacket = comm.makeWorkaroundRequest(connection);
 							
-							Thread.sleep(comm.JOIN_TIME_DELAY);
+							for (int t=0; t<4; t++) {
+								if (stat != null) stat.status("workaround...".substring(0, 10+t));
+								comm.send(waPacket,comm.NPSERVER);
+								
+								Thread.sleep(comm.JOIN_TIME_DELAY);
+							}
 						}
 						
 						deactivate();
@@ -201,20 +203,27 @@ public class Contact {
 					ByteBuffer data = comm.makeDataPoll(Contact.this);
 					
 					int delay;
+					
+					int fd,sd;
+					synchronized (comm.delayLock) {
+						fd = comm.getFastDelay();
+						sd = comm.getSlowDelay();
+					}
+					
 					synchronized (this) {
 						if (wasPinged) {
-							if (rateDelay > comm.fastDelay) {
-								rateDelay -= rateDelay/4;
+							if (rateDelay > fd) {
+								rateDelay -= rateDelay * comm.DECREASE_RT;
 								
-								if (rateDelay < comm.fastDelay)
-									rateDelay = comm.fastDelay;
+								if (rateDelay < fd)
+									rateDelay = fd;
 							}	
 						} else {
-							if (rateDelay < comm.slowDelay) {
-								rateDelay += rateDelay/2;
+							if (rateDelay < sd) {
+								rateDelay += rateDelay * comm.INCREASE_RT;
 								
-								if (rateDelay > comm.slowDelay)
-									rateDelay = comm.slowDelay;
+								if (rateDelay > sd)
+									rateDelay = sd;
 							}
 						}
 						
@@ -231,5 +240,4 @@ public class Contact {
 			}
 		}
 	}
-
 }

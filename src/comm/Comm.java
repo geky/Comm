@@ -39,7 +39,6 @@ public class Comm {
 	public final Connection NPSERVER_KEEP_OPEN;
 	
 	public final int BUFFER_SIZE;
-	public final int DEFAULT_PORT;
 	public final boolean DUMP_PACKETS;
 	public final byte DUMP_INFO;
 	public final PrintStream DUMP_STREAM;
@@ -47,19 +46,18 @@ public class Comm {
 	public final int JOIN_TIME_DELAY;
 	public final int SERVER_TIME_DELAY;
 	
-	public final int DEFAULT_FAST_DELAY;
-	public final int DEFAULT_SLOW_DELAY;
-	protected volatile int fastDelay;
-	protected volatile int slowDelay;
-	
-	public final float RTT_ALPHA;
-	public final int RTT_TIMEOUT;
+	public final float INCREASE_RT;
+	public final float DECREASE_RT;
 	
 	private final DatagramSocket SOCKET;
 	
 	private final long OFFSET_TIME;
 	
-	private Object syncherLock = new Object();
+	protected final Object delayLock = new Object();
+	private int fastDelay;
+	private int slowDelay;
+	
+	protected final Object syncherLock = new Object();
 	private Thread syncher;
 	private boolean synched;
 	
@@ -67,14 +65,16 @@ public class Comm {
 	private final StatusListener stat;
 	private final Map<Connection,Contact> contacts = new HashMap<Connection,Contact>();
 	
-	//private final Map<Byte,? extends Usage> uses;
-	
 	public Comm(Communicable cm) throws SocketException {
-		this(cm,null,null);
+		this(cm,null,null,null);
 	}
 	
 	public Comm(Communicable cm, StatusListener st) throws SocketException {
-		this(cm,st,null);
+		this(cm,st,null,null);
+	}
+	
+	public Comm(Communicable cm, StatusListener st, Connection npserver, Connection unused) throws SocketException {
+		this(cm, st, 512, 8000, 1000, 1000, 1000, 0.5f, 0.25f, -1, npserver, unused);
 	}
 	
 	public Comm(Communicable cm, StatusListener st, Properties p) throws SocketException {
@@ -82,6 +82,7 @@ public class Comm {
 		stat = st;
 		
 		BUFFER_SIZE = Integer.parseInt(p.getProperty("buffer_size","512"));
+		
 		DUMP_PACKETS = Boolean.parseBoolean(p.getProperty("dump_packets", "false"));
 		if (DUMP_PACKETS) {
 			String inf = p.getProperty("dump_info","0x1f");
@@ -109,58 +110,93 @@ public class Comm {
 			DUMP_INFO = 0;
 		}
 		
+		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("server_time_delay","8000"));
 		JOIN_TIME_DELAY = Integer.parseInt(p.getProperty("join_time_delay","1000"));
-		SERVER_TIME_DELAY = Integer.parseInt(p.getProperty("server_time_delay",""+JOIN_TIME_DELAY*8));
-		DEFAULT_FAST_DELAY = fastDelay = Integer.parseInt(p.getProperty("default_fast_delay",""+JOIN_TIME_DELAY));
-		DEFAULT_SLOW_DELAY = slowDelay = Integer.parseInt(p.getProperty("default_slow_delay",""+JOIN_TIME_DELAY));
-		RTT_ALPHA = Float.parseFloat(p.getProperty("rtt_alpha",""+0.875));
-		RTT_TIMEOUT = Integer.parseInt(p.getProperty("rtt_timeout",""+JOIN_TIME_DELAY/4));
+		fastDelay = Integer.parseInt(p.getProperty("fast_delay","1000"));
+		slowDelay = Integer.parseInt(p.getProperty("slow_delay","1000"));
+		INCREASE_RT = Float.parseFloat(p.getProperty("increase_ratio","0.5f"));
+		DECREASE_RT = Float.parseFloat(p.getProperty("decrease_ratio","0.25f"));
 		
 		String port = p.getProperty("default_port");
-		String portRange = p.getProperty("default_range");
+		boolean restrict = Boolean.parseBoolean(p.getProperty("restrict_port","false"));
+		
 		if (port == null) {
-			SOCKET = new DatagramSocket();
-			DEFAULT_PORT = SOCKET.getPort();
-		} else if (portRange == null) {
-			DatagramSocket sock;
-			DEFAULT_PORT = Integer.parseInt(port);
-			try {
-				sock = new DatagramSocket(DEFAULT_PORT);
-			} catch (SocketException e) {
-				sock = new DatagramSocket();
-			}
-			SOCKET = sock;
+			if (restrict)
+				throw new SocketException("Restricted to no ports");
+			else
+				SOCKET = new DatagramSocket();
 		} else {
-			DEFAULT_PORT = Integer.parseInt(port);
-			int defaultPortRange = Integer.parseInt(portRange);
-			
-			DatagramSocket sock = null;
-			for (int t=0; t<defaultPortRange && sock==null; t++) {
+			if (restrict) {
+				SOCKET = new DatagramSocket(Integer.parseInt(port));
+			} else {
+				DatagramSocket sock;
 				try {
-					sock = new DatagramSocket(DEFAULT_PORT+t); 
+					sock = new DatagramSocket(Integer.parseInt(port));
 				} catch (SocketException e) {
-					sock = null;
+					sock = new DatagramSocket();
 				}
+				SOCKET = sock;
 			}
-			if (sock == null)
-				sock = new DatagramSocket();
-			SOCKET = sock;
 		}
 		
 		Connection npserver;
 		Connection npunused;
 		try {
-			String s = p.getProperty("server","127.0.0.1:"+DEFAULT_PORT);
-			npserver = new Connection(s);
-			npunused = new Connection(p.getProperty("server_keep_open",s.split(":")[0]+":" + (npserver.port-1)));
+			String s1 = p.getProperty("server");
+			npserver = s1==null ? null : new Connection(s1);
+			String s2 = p.getProperty("server_keep_open");
+			npunused = s2==null ? null : new Connection(s2);
 		} catch (UnknownHostException e) {
-			try {
-				npserver = new Connection("127.0.0.1:"+DEFAULT_PORT);
-				npunused = new Connection("127.0.0.1:"+(DEFAULT_PORT-1));
-			} catch (UnknownHostException e2) {
-				npunused = npserver = null;
-			}
+			npunused = npserver = null;
 		}
+		NPSERVER = npserver;
+		NPSERVER_KEEP_OPEN = npunused;
+		
+		OFFSET_TIME = System.currentTimeMillis();
+	}
+	
+	public Comm(Communicable cm, StatusListener st, int buffer_size, int server_time_delay, int join_time_delay, int fast_delay, int slow_delay, float increase_ratio, float decrease_ratio, int port, Connection npserver, Connection npunused) throws SocketException {
+		source = cm;
+		stat = st;
+		
+		BUFFER_SIZE = buffer_size;
+		
+		DUMP_PACKETS = false;
+		DUMP_INFO = 0;
+		DUMP_STREAM = null;
+		
+		JOIN_TIME_DELAY = join_time_delay;
+		SERVER_TIME_DELAY = server_time_delay;
+		fastDelay = fast_delay;
+		slowDelay = slow_delay;
+		INCREASE_RT = increase_ratio;
+		DECREASE_RT = decrease_ratio;
+		
+		SOCKET = port == -1 ? new DatagramSocket() : new DatagramSocket(port);
+		NPSERVER = npserver;
+		NPSERVER_KEEP_OPEN = npunused;
+		
+		OFFSET_TIME = System.currentTimeMillis();
+	}
+	
+	public Comm(Communicable cm, StatusListener st, int buffer_size, int server_time_delay, int join_time_delay, int fast_delay, int slow_delay, float increase_ratio, float decrease_ratio, int port, Connection npserver, Connection npunused, byte dump_info, PrintStream dump_stream) throws SocketException {
+		source = cm;
+		stat = st;
+		
+		BUFFER_SIZE = buffer_size;
+		
+		DUMP_PACKETS = true;
+		DUMP_INFO = dump_info;
+		DUMP_STREAM = dump_stream;
+		
+		JOIN_TIME_DELAY = join_time_delay;
+		SERVER_TIME_DELAY = server_time_delay;
+		fastDelay = fast_delay;
+		slowDelay = slow_delay;
+		INCREASE_RT = increase_ratio;
+		DECREASE_RT = decrease_ratio;
+		
+		SOCKET = port == -1 ? new DatagramSocket() : new DatagramSocket(port);
 		NPSERVER = npserver;
 		NPSERVER_KEEP_OPEN = npunused;
 		
@@ -182,13 +218,15 @@ public class Comm {
 		public void run() {
 			while (true) {
 				try {
-					ByteBuffer request = makeServerRequest();
-					
-					for (int t=0; t<4; t++) {
-						if (stat != null) stat.status("synching...".substring(0, 8+t));
-						send(request,NPSERVER);
+					if (NPSERVER != null) {
+						ByteBuffer request = makeServerRequest();
 						
-						Thread.sleep(JOIN_TIME_DELAY);
+						for (int t=0; t<4; t++) {
+							if (stat != null) stat.status("synching...".substring(0, 8+t));
+							send(request,NPSERVER);
+							
+							Thread.sleep(JOIN_TIME_DELAY);
+						}
 					}
 				
 					Connection c;
@@ -216,7 +254,8 @@ public class Comm {
 				
 				ByteBuffer ko = makeKeepOpen();
 				while (isSynched()) {
-					send(ko,NPSERVER_KEEP_OPEN);
+					if (NPSERVER_KEEP_OPEN != null)
+						send(ko,NPSERVER_KEEP_OPEN);
 					try {
 						Thread.sleep(SERVER_TIME_DELAY);
 					} catch (InterruptedException e) {}
@@ -237,13 +276,28 @@ public class Comm {
 		}
 	}
 	
-	//TODO mess with this
 	public void setFastDelay(int d) {
-		fastDelay = d;
+		synchronized (delayLock) {
+			fastDelay = d;
+		}
 	}
 	
 	public void setSlowDelay(int d) {
-		slowDelay = d;
+		synchronized (delayLock) {
+			slowDelay = d;
+		}
+	}
+	
+	public int getFastDelay() {
+		synchronized (delayLock) {
+			return fastDelay;
+		}
+	}
+	
+	public int getSlowDelay() {
+		synchronized (delayLock) {
+			return slowDelay;
+		}
 	}
 	
 //	public void updateRateDelay() {

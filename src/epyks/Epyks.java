@@ -61,6 +61,8 @@ public class Epyks extends JFrame implements Communicable,StatusListener {
 			}
 		});
 	}
+	
+	public final int DEFAULT_PORT;
 
 	private JPanel peersPanel;
 	private JPanel pendingPeersPanel;
@@ -84,6 +86,8 @@ public class Epyks extends JFrame implements Communicable,StatusListener {
 		} catch (IOException e) {
 			System.err.println("IOException reading config!");
 		}
+		
+		DEFAULT_PORT = Integer.parseInt(props.getProperty("default_port","11111"));
 		
 		try {
 			comm = new Comm(this,this,props);
@@ -310,7 +314,7 @@ public class Epyks extends JFrame implements Communicable,StatusListener {
 
 			Connection c;
 			try {
-				c = new Connection(ip, comm.DEFAULT_PORT);
+				c = new Connection(ip, 11111);
 			} catch (UnknownHostException e) {
 				System.err.println("Bad Address");
 				return;
@@ -492,8 +496,7 @@ public class Epyks extends JFrame implements Communicable,StatusListener {
 
 		@Override
 		public synchronized void doEvent(Contact s, Event e) {
-			// TODO Auto-generated method stub
-
+			
 		}
 
 		@Override
@@ -522,7 +525,7 @@ public class Epyks extends JFrame implements Communicable,StatusListener {
 				connection = c;
 			}
 
-			user.message((checked?"":"~") + connection.toString(comm.DEFAULT_PORT), Color.BLACK);
+			user.message((checked?"":"~") + connection.toString(11111), Color.BLACK);
 		}
 		
 		public Component add(Component jc) {
