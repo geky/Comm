@@ -173,6 +173,7 @@ public:
     
     Contact * get(const Address&);
     void pad(unsigned char*,size_t);
+    size_t get_pad(unsigned char*);
     
     virtual ~Connector();
     
@@ -212,7 +213,6 @@ private:
     unsigned int buffer_i;
     unsigned char * event_buffer;
     
-    void send_raw(const Address&, unsigned char*);
     void send_raw(const Address&, unsigned char*, size_t);
     void synch_run();
     void rec_run();

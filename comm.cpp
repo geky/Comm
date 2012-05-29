@@ -144,6 +144,7 @@ void Contact::conn_run() {
             comm->pad(conn_buffer,1);
             comm->contactor->init(conn_buffer+1);
             
+            
         }
     }
 }
@@ -272,7 +273,7 @@ void Connector::send_event(unsigned char * b) {
         b[2] = ((c->sent_mask ^= bit) & bit) >> b[1];
         c->conn_mutex.unlock();
         
-        send_raw(c->address,b);
+        send_raw(c->address,b,get_pad(b));
     }
     contact_mutex.unlock();
 }
@@ -287,19 +288,32 @@ void Connector::send_event(Contact * c, unsigned char * b) {
     b[2] = ((c->sent_mask ^= bit) & bit) >> b[1];
     c->conn_mutex.unlock();
     
-    send_raw(c->address,b);
-}
-
-void Connector::send_raw(const Address& a, unsigned char * b) {
-    size_t s = block_s;
-    while (!b[s]) --s;
-    send_raw(a,b,s);
+    send_raw(c->address,b,get_pad(b));
 }
 
 void Connector::send_raw(const Address& a, unsigned char * b, size_t h) {
     send_mutex.lock();
     socket.send(b,h,a.address,a.port);
     send_mutex.unlock();
+}
+
+Contact * Connector::get(const Address & a) {
+    contact_mutex.lock();
+    std::map<Address,Contact*>::iterator ci = contacts.find(a);
+    contact_mutex.unlock();
+    
+    if (ci == contacts.end()) return 0;
+    return ci->second;
+}
+
+inline void Connector::pad(unsigned char * b, size_t s) {
+    memset(b+s,0,block_s-s);
+}
+
+inline size_t Connector::get_pad(unsigned char * b) {
+    size_t s=block_s;
+    while (!b[s]) --s;
+    return s;
 }
 
 void Connector::synch_run() {
@@ -376,7 +390,7 @@ void Connector::rec_run() {
                 *rec_buffer = JOIN_SUCCESS;
                 pad(rec_buffer,1);
                 contactor->init(rec_buffer+1);
-                send_raw(rec_a,rec_buffer);
+                send_raw(rec_a,rec_buffer,get_pad(rec_buffer));
             } break;
            
             case JOIN_SUCCESS: {
@@ -397,7 +411,7 @@ void Connector::rec_run() {
                 rec_c->conn_mutex.unlock();
                
                 for (unsigned char*e=event_buffer; mask; mask>>=1, e+=block_s) {
-                    if (mask & 1) send_raw(rec_c->address,e);
+                    if (mask & 1) send_raw(rec_c->address,e,get_pad(e));
                 }
                
                 pad(rec_buffer,rec_s);
@@ -457,7 +471,7 @@ void Connector::rec_run() {
                     *rec_buffer = JOIN;
                     pad(rec_buffer,1);
                     contactor->init(rec_buffer+1);
-                    send_raw(rec_a,rec_buffer);
+                    send_raw(rec_a,rec_buffer,get_pad(rec_buffer));
                 }
             } break;
             
@@ -467,24 +481,11 @@ void Connector::rec_run() {
                     *rec_buffer = JOIN;
                     pad(rec_buffer,1);
                     contactor->init(rec_buffer+1);
-                    send_raw(rec_a,rec_buffer);
+                    send_raw(rec_a,rec_buffer,get_pad(rec_buffer));
                 }
             } break;
         }
     }
-}
-
-Contact * Connector::get(const Address & a) {
-    contact_mutex.lock();
-    std::map<Address,Contact*>::iterator ci = contacts.find(a);
-    contact_mutex.unlock();
-    
-    if (ci == contacts.end()) return 0;
-    return ci->second;
-}
-
-inline void Connector::pad(unsigned char * b, size_t s) {
-    memset(b+s,0,block_s-s);
 }
 
 Connector::~Connector() {
