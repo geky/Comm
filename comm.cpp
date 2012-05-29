@@ -218,35 +218,35 @@ void Connector::synch(const Address& a, const Address& k) {
 
 void Connector::add_contact(Contact * c) {
     contact_mutex.lock();
-    if (!c || c->comm) return;
+    if (c && !c->comm) {
     
-    //TODO stuff
-    contacts[c->address] = c;
-    
-    c->comm = this;
-    c->conn_buffer = new unsigned char[block_s];
-    
-    c->running = true;
-    c->conn_thread.launch();
-    
+        //TODO stuff
+        contacts[c->address] = c;
+
+        c->comm = this;
+        c->conn_buffer = new unsigned char[block_s];
+
+        c->running = true;
+        c->conn_thread.launch();
+    }
     contact_mutex.unlock();
 }
 
 void Connector::remove_contact(Contact * c) {
     contact_mutex.lock();
-    if (!c || !c->comm) return;
-    
-    //TODO stuff
-    contacts.erase(c->address);
-    
-    
-    c->running = false;
-    c->conn_thread.wait();
-    
-    delete[] c->conn_buffer;
-    c->conn_buffer = 0;
-    c->comm = 0;
-    
+    if (c && c->comm) {
+
+        //TODO stuff
+        contacts.erase(c->address);
+
+
+        c->running = false;
+        c->conn_thread.wait();
+
+        delete[] c->conn_buffer;
+        c->conn_buffer = 0;
+        c->comm = 0;
+    }
     contact_mutex.unlock();
 }
 
