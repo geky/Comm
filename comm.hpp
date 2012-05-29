@@ -49,10 +49,10 @@ enum id_t {
 
 enum stat_t {
     SUCCESS = 0,
-    REJECTION,
-    FAILURE,
     TRY_0, TRY_1, TRY_2, TRY_3,
-    ALT_TRY_0, ALT_TRY_1, ALT_TRY_2, ALT_TRY_3
+    ALT_TRY_0, ALT_TRY_1, ALT_TRY_2, ALT_TRY_3,
+    FAILURE,
+    REJECTION
 };
 
 
@@ -83,7 +83,7 @@ struct config { // config for comm
     int slow_delay;
     float increase_ratio;
     float decrease_ratio;
-    sf::Uint16 default_port;
+    unsigned short default_port;
     //Address npserver;
 }; 
 
@@ -171,10 +171,6 @@ public:
     void send_event(unsigned char*);
     void send_event(Contact*, unsigned char*);
     
-    Contact * get(const Address&);
-    void pad(unsigned char*,size_t);
-    size_t get_pad(unsigned char*);
-    
     virtual ~Connector();
     
 private:
@@ -184,7 +180,7 @@ private:
     const sf::Time slow_d;
     const float inc_r;
     const float dec_r;
-    const sf::Uint16 port;
+    const unsigned short port;
     
     Address npserver;
     Address npkeepopen;
@@ -213,9 +209,15 @@ private:
     unsigned int buffer_i;
     unsigned char * event_buffer;
     
+    Contact * get(const Address&);
+    void pad(unsigned char*,size_t);
+    size_t get_pad(unsigned char*);
+    
     void send_raw(const Address&, unsigned char*, size_t);
     void synch_run();
     void rec_run();
+    
+    friend void Contact::conn_run();
     
     //these are here to prevent copying
     Connector(const Connector&);
