@@ -15,7 +15,8 @@ public:
     virtual void stat(stat_t) {}
     
     const Address address;
-    
+    Connector * comm;
+   
 protected:
     volatile bool connected;
     volatile bool running;
@@ -25,7 +26,6 @@ private:
     mask_t rec_mask;
     
     unsigned char * conn_buffer;
-    Connector * comm;
     
     sf::Mutex conn_mutex;
     sf::Thread conn_thread;

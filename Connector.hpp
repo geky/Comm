@@ -45,6 +45,7 @@ private:
     const sf::Time join_d;
     const sf::Time fast_d;
     const sf::Time slow_d;
+	const sf::Time res_d;
     const float inc_r;
     const float dec_r;
     const unsigned short port;
@@ -76,6 +77,7 @@ private:
     int event_i;
     
     void synch_run();
+	void send_run(Contact*);
     void rec_run();
     
     friend void Contact::conn_run();

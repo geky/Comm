@@ -66,6 +66,7 @@ struct config { // config for comm
     int join_time_delay;
     int fast_delay;
     int slow_delay;
+	int resolution;
     float increase_ratio;
     float decrease_ratio;
     unsigned short default_port;
@@ -75,6 +76,7 @@ struct config { // config for comm
 static const config default_config = {
     8000,1000,
     1000,1000,
+	10,	
     0.5, 0.25,
     11110, 
     //Address() //11111
