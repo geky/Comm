@@ -55,15 +55,15 @@ Buffer& Buffer::operator>>(sf::Uint64 & d) {
 }
 
 Buffer& Buffer::operator>>(float & d) {
-	sf::Uint32 temp;
+    sf::Uint32 temp;
     *this >> temp;
-	d = reinterpret_cast<float>(temp);
+    d = *reinterpret_cast<float*>(&temp);
 }
 
 Buffer& Buffer::operator>>(double & d) {
     sf::Uint64 temp;
     *this >> temp;
-	d = reinterpret_cast<double>(temp);
+    d = *reinterpret_cast<double*>(&temp);
 }
 
 Buffer& Buffer::operator>>(char * d) {
@@ -80,19 +80,21 @@ Buffer& Buffer::operator>>(char * d) {
 }
 
 Buffer& Buffer::operator>>(sf::String & d) {
-	Uint32 temp;
+	sf::Uint32 temp;
 	d.clear();
 	while (index+4 <= limit) {
 		*this >> temp;
 		if (!temp) break;
 		d += temp;
 	}
-	d += 0;
+	d += '\0';
 }
 
 Buffer& Buffer::operator>>(Address & a) {
-    this* >> a.address;
-	this* >> a.port;
+    sf::Uint32 temp;
+    *this >> temp;
+    a.address = sf::IpAddress(temp);
+    *this >> a.port;
 }
 
     
@@ -101,19 +103,24 @@ Buffer& Buffer::put(const char * d, size_t s) {
     memcpy(index,d,s);
     index += s;    
 }
-    
+
 Buffer& Buffer::operator<<(bool d) {
     assert(index < limit);
     *(index++) = d;    
 }
-
+    
 Buffer& Buffer::operator<<(sf::Uint8 d) {
+    assert(index < limit);
+    *(index++) = d;    
+}
+
+Buffer& Buffer::operator<<(sf::Uint16 d) {
     assert(index+2 <= limit);
     *(index++) = d>>8; 
     *(index++) = d;
 }
 
-Buffer& Buffer::operator<<(sf::Uint16 d) {
+Buffer& Buffer::operator<<(sf::Uint32 d) {
     assert(index+4 <= limit);
     *(index++) = d>>24; 
     *(index++) = d>>16;
@@ -134,11 +141,11 @@ Buffer& Buffer::operator<<(sf::Uint64 d) {
 }
     
 Buffer& Buffer::operator<<(float d) {
-    *this << reinterpret_cast<sf::Uint32>(d);
+    *this << *reinterpret_cast<sf::Uint32*>(&d);
 }
 
-Buffer& Buffer::operator<<(double) {
-	*this << reinterpret_cast<sf::Uint64>(d);
+Buffer& Buffer::operator<<(double d) {
+	*this << *reinterpret_cast<sf::Uint64*>(&d);
 }
 
 Buffer& Buffer::operator<<(const char * d) {
@@ -148,7 +155,7 @@ Buffer& Buffer::operator<<(const char * d) {
 			break;
 		}
 
-		*(d++) = *(index++);
+		*(index++) = *(d++);
 	}
 }
 
@@ -165,7 +172,7 @@ Buffer& Buffer::operator<<(const sf::String & d) {
 }
 
 Buffer& Buffer::operator<<(const Address & a) {
-	*this << a.address;
+	*this << a.address.toInteger();
 	*this << a.port;
 }
 
