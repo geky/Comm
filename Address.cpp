@@ -49,4 +49,16 @@ bool operator> (const Address & l, const Address & r) {return r<l;}
 bool operator<=(const Address & l, const Address & r) {return !(r<l);}
 bool operator>=(const Address & l, const Address & r) {return !(l<r);}
 
+Buffer& operator>>(Buffer & b, Address & a) {
+    sf::Uint32 temp;
+    b >> temp;
+    a.address = sf::IpAddress(temp);
+    b >> a.port;
+}
+
+Buffer& operator<<(Buffer & b, const Address & a) {
+	b << a.address.toInteger();
+	b << a.port;
+}
+
 } // comm

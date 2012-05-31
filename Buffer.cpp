@@ -90,13 +90,6 @@ Buffer& Buffer::operator>>(sf::String & d) {
 	d += '\0';
 }
 
-Buffer& Buffer::operator>>(Address & a) {
-    sf::Uint32 temp;
-    *this >> temp;
-    a.address = sf::IpAddress(temp);
-    *this >> a.port;
-}
-
     
 Buffer& Buffer::put(const char * d, size_t s) {
     assert(index+s <= limit);
@@ -169,11 +162,6 @@ Buffer& Buffer::operator<<(const sf::String & d) {
 		*this << *i;
 		++i;
 	}
-}
-
-Buffer& Buffer::operator<<(const Address & a) {
-	*this << a.address.toInteger();
-	*this << a.port;
 }
 
 } // comm

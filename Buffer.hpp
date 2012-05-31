@@ -29,9 +29,7 @@ public:
     Buffer& operator>>(float&);
     Buffer& operator>>(double&);
     Buffer& operator>>(char*);
-    Buffer& operator>>(std::string&);
     Buffer& operator>>(sf::String&);
-    Buffer& operator>>(Address&);
 
     Buffer& put(const char*, size_t);
     
@@ -47,9 +45,7 @@ public:
     Buffer& operator<<(float);
     Buffer& operator<<(double);
     Buffer& operator<<(const char*);
-    Buffer& operator<<(const std::string&);
     Buffer& operator<<(const sf::String&);
-    Buffer& operator<<(const Address&);
 };    
 
 }

@@ -30,6 +30,9 @@ bool operator> (const Address&,const Address&);
 bool operator<=(const Address&,const Address&);
 bool operator>=(const Address&,const Address&);
 
+Buffer& operator>>(Buffer&, Address&);
+Buffer& operator<<(Buffer&, const Address&);
+
 } // comm
 
 #endif // COMM_ADDRESS_HPP
