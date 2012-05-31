@@ -5,10 +5,12 @@
 
 namespace comm {
 
-Buffer::Buffer():
-        data(0), limit(0), index(0) {}
+Buffer::Buffer(char * d, size_t l):
+        data(d), limit(d+l), index(d) {}
+Buffer::Buffer(char * d, size_t o, size_t l):
+        data(d), limit(d+l), index(d+o) {}
 Buffer::Buffer(const Buffer& b):
-        data(b.data), limit(b.limit), index(0) {} 
+        data(b.data), limit(b.limit), index(b.data) {} 
 Buffer::~Buffer() {}
 
 // Network write/read operations

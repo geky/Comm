@@ -6,14 +6,15 @@ namespace comm {
 
 class Buffer {
 public:
-    Buffer();
+    Buffer(char *, size_t);
+    Buffer(char *, size_t, size_t);
     Buffer(const Buffer&);
     virtual ~Buffer();
     
     //use with caution
-    char * data;
+    char * const data;
     char * index;
-    char * limit;
+    char * const limit;
     
     Buffer& get(char*, size_t);
     

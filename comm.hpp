@@ -82,9 +82,9 @@ static const config default_config = {
 
 class Contactor {
 public:
-    virtual Contact * make_contact(const Address&, unsigned char*) {return 0;}
-    virtual void poll(unsigned char *) {}
-    virtual void init(unsigned char *) {}
+    virtual Contact * make_contact(const Address&, Buffer&) {return 0;}
+    virtual void poll(Buffer&) {}
+    virtual void init(Buffer&) {}
     virtual void stat(stat_t) {}
 };
 

@@ -18,20 +18,27 @@ public:
     
     Address get_address();
     
-    void start();
+    stat_t start();
     void end();
     
     void synch(const Address&);
     void synch(const Address&, const Address&);
     
     void add_contact(Contact*);
+    Contact * get_contact(const Address&);
     void remove_contact(Contact*);
     
-    unsigned char * make_event();
-    void send_event(unsigned char*);
-    void send_event(Contact*, unsigned char*);
+    Buffer make_event();
+    void send_event(const Buffer&);
+    void send_event(Contact*, const Buffer&);
     
     virtual ~Connector();
+    
+protected:
+    void send_event(const Address&, mask_t, char*, size_t);
+    
+    void send_raw(const Address&, const Buffer&);
+    void send_raw(const Address&, void*, size_t);
     
 private:
     const sf::Time server_d;
@@ -64,16 +71,10 @@ private:
     
     const size_t block_s;
     
-    unsigned char * rec_buffer;
+    char * rec_buffer;
+    char * event_buffer;
+    int event_i;
     
-    unsigned int buffer_i;
-    unsigned char * event_buffer;
-    
-    Contact * get(const Address&);
-    void pad(unsigned char*,size_t);
-    size_t get_pad(unsigned char*);
-    
-    void send_raw(const Address&, unsigned char*, size_t);
     void synch_run();
     void rec_run();
     

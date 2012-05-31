@@ -10,8 +10,8 @@ public:
     Contact(const Contact& orig);
     virtual ~Contact();
     
-    virtual void do_event(unsigned char*) {};
-    virtual void do_data(unsigned char*) {};
+    virtual void do_event(Buffer&) {};
+    virtual void do_data(Buffer&) {};
     virtual void stat(stat_t) {}
     
     const Address address;

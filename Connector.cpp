@@ -6,24 +6,29 @@ namespace comm {
 Connector::Connector(size_t bs, Contactor* conn, const config& conf) :
         contactor(conn), 
         buffer_size(bs<MIN_BUFFER_SIZE ? MIN_BUFFER_SIZE : bs),
-        buffer_i(0),
+        event_i(0),
         block_s(header_s + buffer_size),
+        
         rec_thread(&Connector::rec_run, this),
         synch_thread(&Connector::rec_run, this),
+        
         server_d(sf::milliseconds(conf.server_time_delay)),
         join_d(sf::milliseconds(conf.join_time_delay)),
         fast_d(sf::milliseconds(conf.fast_delay)),
         slow_d(sf::milliseconds(conf.slow_delay)),
         inc_r(conf.increase_ratio),
         dec_r(conf.decrease_ratio),
-        port(conf.default_port)
-        {
+        port(conf.default_port) {
     
     assert(buffer_size <= MAX_BUFFER_SIZE);
-    rec_buffer = new unsigned char[block_s*(mask_bits+2)];
-    event_buffer = rec_buffer + block_s;
     
-    for (unsigned char t=0; t<mask_bits; t++) {
+    //[rec, e0_s, e0, e1_s, e1...]
+    rec_buffer = new char[(2+block_s)*mask_bits + block_s];
+    event_buffer = rec_buffer + block_s + 2;
+    
+    for (int t=0; t<mask_bits; t++) {
+        event_buffer[t*block_s-2] = 0;
+        event_buffer[t*block_s-1] = 0;
         event_buffer[t*block_s  ] = EVENT;
         event_buffer[t*block_s+1] = t;
     }
@@ -37,10 +42,11 @@ Address Connector::get_address() {
     return temp;
 }
 
-void Connector::start() {
-    socket.bind(port);
-    rec_thread.launch();
+stat_t Connector::start() {
+    if (socket.bind(port) != sf::Socket::Done) return FAILURE;
+    
     synched = true;
+    rec_thread.launch();
     synch_thread.launch();
     
     contact_mutex.lock();
@@ -49,6 +55,7 @@ void Connector::start() {
         i->second->conn_thread.launch();
     }
     contact_mutex.unlock();
+    return SUCCESS;
 }
 
 void Connector::end() {
@@ -84,71 +91,7 @@ void Connector::add_contact(Contact * c) {
     contact_mutex.unlock();
 }
 
-void Connector::remove_contact(Contact * c) {
-    contact_mutex.lock();
-    if (c && c->comm) {
-
-        //TODO stuff
-        contacts.erase(c->address);
-
-
-        c->running = false;
-        c->conn_thread.wait();
-
-        delete[] c->conn_buffer;
-        c->conn_buffer = 0;
-        c->comm = 0;
-    }
-    contact_mutex.unlock();
-}
-
-unsigned char * Connector::make_event() {
-    index_mutex.lock();
-    unsigned char * index = event_buffer + buffer_i*block_s;
-    buffer_i = (buffer_i+1) % mask_bits;
-    index_mutex.unlock();
-    pad(index,header_s);
-    return index+header_s;
-}
-
-void Connector::send_event(unsigned char * b) {
-    b -= header_s;
-    assert(*b == EVENT);
-    
-    mask_t bit = 1 << b[1];
-    
-    contact_mutex.lock();
-    for (std::map<Address,Contact*>::iterator i = contacts.begin(); i != contacts.end(); ++i) {
-        Contact * c = i->second;
-        c->conn_mutex.lock();
-        b[2] = ((c->sent_mask ^= bit) & bit) >> b[1];
-        c->conn_mutex.unlock();
-        
-        send_raw(c->address,b,get_pad(b));
-    }
-    contact_mutex.unlock();
-}
-
-void Connector::send_event(Contact * c, unsigned char * b) {
-    b -= header_s;
-    assert(*b == EVENT);
-    
-    mask_t bit = 1 << b[1];
-    
-    c->conn_mutex.lock();
-    b[2] = ((c->sent_mask ^= bit) & bit) >> b[1];
-    c->conn_mutex.unlock();
-    
-    send_raw(c->address,b,get_pad(b));
-}
-
-void Connector::send_raw(const Address& a, unsigned char * b, size_t h) {
-    send_mutex.lock();
-    socket.send(b,h,a.address,a.port);
-    send_mutex.unlock();
-}
-
-Contact * Connector::get(const Address & a) {
+Contact * Connector::get_contact(const Address & a) {
     contact_mutex.lock();
     std::map<Address,Contact*>::iterator ci = contacts.find(a);
     contact_mutex.unlock();
@@ -157,14 +100,70 @@ Contact * Connector::get(const Address & a) {
     return ci->second;
 }
 
-inline void Connector::pad(unsigned char * b, size_t s) {
-    memset(b+s,0,block_s-s);
+void Connector::remove_contact(Contact * c) {
+    contact_mutex.lock();
+    if (c && c->comm) {
+
+        //TODO stuff
+        contacts.erase(c->address);
+
+        c->running = false;
+        c->conn_thread.wait(); //TODO this may take up to 1000ms, alternative?
+
+        delete[] c->conn_buffer;
+        c->conn_buffer = 0;
+        c->comm = 0;
+    }
+    contact_mutex.unlock();
 }
 
-inline size_t Connector::get_pad(unsigned char * b) {
-    size_t s=block_s;
-    while (!b[s]) --s;
-    return s;
+Buffer Connector::make_event() {
+    index_mutex.lock();
+    Buffer b(event_buffer+(event_i++)*block_s, block_s);
+    b.data[-2] = b.data[-1] = 0;
+    b.index += header_s;
+    event_i %= mask_bits;
+    index_mutex.unlock();
+    return b;
+}
+
+void Connector::send_event(const Address & a, mask_t m, char * b, size_t l) {
+    assert(*b == EVENT);
+    b[2] = (m >> b[1]) & 1;
+    send_raw(a,b,l);
+}
+
+void Connector::send_event(Contact * c, const Buffer & b) {
+    mask_t mask;
+    size_t size = b.limit-b.index;
+    
+    c->conn_mutex.lock();
+    mask = (c->sent_mask ^= (1<<b.data[1]));
+    c->conn_mutex.unlock();
+    
+    *reinterpret_cast<sf::Uint16*>(b.data-2) = size;
+    send_event(c->address, mask, b.data, size);
+}
+
+void Connector::send_event(const Buffer & b) {
+    mask_t temp;    
+    contact_mutex.lock();
+    for (std::map<Address,Contact*>::iterator i = contacts.begin(); i != contacts.end(); ++i) {
+        send_event(i->second,b);
+    }
+    contact_mutex.unlock();
+}
+
+void Connector::send_raw(const Address& a, const Buffer& b) {
+    send_mutex.lock();
+    socket.send(b.data,b.limit-b.index,a.address,a.port);
+    send_mutex.unlock();
+}
+
+void Connector::send_raw(const Address& a, void * b, size_t h) {
+    send_mutex.lock();
+    socket.send(b,h,a.address,a.port);
+    send_mutex.unlock();
 }
 
 void Connector::synch_run() {
@@ -220,10 +219,11 @@ void Connector::rec_run() {
         switch(*rec_buffer) {
     
             case JOIN: {
-                Contact * rec_c = get(rec_a);
-                if (!rec_c) {
-                    pad(rec_buffer,rec_s);
-                    rec_c = contactor->make_contact(rec_a, rec_buffer+1);
+                Contact * rec_c = get_contact(rec_a);
+                
+                if (!rec_c) { 
+                    Buffer temp(rec_buffer,1,rec_s);
+                    rec_c = contactor->make_contact(rec_a, temp);
                    
                     if (!rec_c) {
                         *rec_buffer = JOIN_FAILURE;
@@ -239,9 +239,9 @@ void Connector::rec_run() {
                 //TODO update connection status
                
                 *rec_buffer = JOIN_SUCCESS;
-                pad(rec_buffer,1);
-                contactor->init(rec_buffer+1);
-                send_raw(rec_a,rec_buffer,get_pad(rec_buffer));
+                Buffer temp(rec_buffer,1,block_s);
+                contactor->init(temp);
+                send_raw(rec_a,temp);
             } break;
            
             case JOIN_SUCCESS: {
@@ -253,52 +253,57 @@ void Connector::rec_run() {
             } break;
            
             case DATA: {
-                Contact * rec_c = get(rec_a);
+                Contact * rec_c = get_contact(rec_a);
                 if (!rec_c) break;
+                mask_t diff, mask;
+                Buffer temp(rec_buffer,1,rec_s);
                 
                 rec_c->conn_mutex.lock();
                 //TODO update connection status
-                mask_t mask = rec_c->sent_mask ^ from_buffer<mask_t>(rec_buffer+1);
+                mask = rec_c->sent_mask;
                 rec_c->conn_mutex.unlock();
+                
+                temp >> diff;
+                diff ^= mask;
                
-                for (unsigned char*e=event_buffer; mask; mask>>=1, e+=block_s) {
-                    if (mask & 1) send_raw(rec_c->address,e,get_pad(e));
+                for (int t=0; diff; diff>>=1, t++) {
+                    if (diff & 1) {
+                        char * data = event_buffer+t*block_s;
+                        sf::Uint16 size = *reinterpret_cast<sf::Uint16*>(data-2);
+                        send_event(rec_c->address,mask,data,size);
+                    }
                 }
-               
-                pad(rec_buffer,rec_s);
-                rec_c->do_data(rec_buffer+header_s);
+                
+                rec_c->do_data(temp);
             } break;
            
             case EVENT: {
-                Contact * rec_c = get(rec_a);
+                Contact * rec_c = get_contact(rec_a);
                 if (!rec_c) break;
                 
-                mask_t bit = 1 << rec_buffer[1];
-                bool val = rec_buffer[2];
-                
                 rec_c->conn_mutex.lock();
-                if ((rec_c->rec_mask & bit) >> rec_buffer[1] == val) {
+                if (((rec_c->rec_mask >> rec_buffer[1]) & 1) == rec_buffer[2]) {
                     rec_c->conn_mutex.unlock();
                 } else {
-                    rec_c->rec_mask ^= bit;
+                    rec_c->rec_mask ^= (1 << rec_buffer[1]);
                     rec_c->conn_mutex.unlock();
-                    pad(rec_buffer,rec_s);
-                    rec_c->do_event(rec_buffer+header_s);                   
+                    Buffer temp(rec_buffer,header_s,rec_s);
+                    rec_c->do_event(temp);                   
                 }               
             } break;
            
             //letting it run as a server, not sure what will happen
             case SERVER_REQUEST: {
                 *rec_buffer = SERVER_REPLY;
-                rec_a.toBuffer(rec_buffer+1);
+                Buffer(rec_buffer,1,block_s) << rec_a;
                 send_raw(rec_a,rec_buffer,7);
             } break;
            
             case SERVER_REPLY: {
                 if (!synched) {
-                    synched = true;
                     address_mutex.lock();
                     address = Address(rec_buffer+1);
+                    synched = true;
                     address_mutex.unlock();
                 }
             } break;
@@ -308,31 +313,31 @@ void Connector::rec_run() {
                 Address temp(rec_buffer+1);
                 
                 *rec_buffer = WORKAROUND_FORWARD;
-                rec_a.toBuffer(rec_buffer+1);
+                Buffer(rec_buffer,1,block_s) << rec_a;
                 send_raw(temp,rec_buffer,7);
             } break;
            
             case WORKAROUND_FORWARD: {
                 rec_a = Address(rec_buffer+1);
-                Contact * rec_c = get(rec_a);
+                Contact * rec_c = get_contact(rec_a);
                 if (!rec_c) {
                     *rec_buffer = WORKAROUND_ACK;
                     send_raw(rec_a,rec_buffer,1);
                 } else {
                     *rec_buffer = JOIN;
-                    pad(rec_buffer,1);
-                    contactor->init(rec_buffer+1);
-                    send_raw(rec_a,rec_buffer,get_pad(rec_buffer));
+                    Buffer temp(rec_buffer,1,block_s);
+                    contactor->init(temp);
+                    send_raw(rec_a,temp);
                 }
             } break;
             
             case WORKAROUND_ACK: {
-                Contact * rec_c = get(rec_a);
+                Contact * rec_c = get_contact(rec_a);
                 if (rec_c) {
                     *rec_buffer = JOIN;
-                    pad(rec_buffer,1);
-                    contactor->init(rec_buffer+1);
-                    send_raw(rec_a,rec_buffer,get_pad(rec_buffer));
+                    Buffer temp(rec_buffer,1,block_s);
+                    contactor->init(temp);
+                    send_raw(rec_a,temp);
                 }
             } break;
         }

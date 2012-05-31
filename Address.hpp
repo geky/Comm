@@ -8,11 +8,11 @@ class Address {
 public:
     Address();
     Address(const Address&);
-    Address(unsigned char*);
+    Address(char*);
+    Address(Buffer&);
     Address(char, char, char, char, sf::Uint16);
     Address(sf::Uint32, sf::Uint16);
     Address(const sf::IpAddress&, sf::Uint16);
-    Address(const std::string&);
     
     std::string toString();
     void toBuffer(unsigned char*);

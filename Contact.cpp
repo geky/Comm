@@ -27,11 +27,11 @@ void Contact::conn_run() {
             
         }
         
-        if (!connected) {
-            *conn_buffer = JOIN;
-            comm->pad(conn_buffer,1);
-            comm->contactor->init(conn_buffer+1);
-            size_t conn_s = comm->get_pad(conn_buffer);
+        /*if (!connected) {
+            *rec_buffer = JOIN;
+                    Buffer temp(rec_buffer,1,block_s);
+                    contactor->init(temp);
+                    send_raw(rec_a,temp);
             
             for (int t=TRY_0; !connected && t<ALT_TRY_0; ++t) {
                 stat((stat_t)t);
@@ -51,7 +51,7 @@ void Contact::conn_run() {
             }
         }
         
-        stat(connected?SUCCESS:FAILURE); 
+        stat(connected?SUCCESS:FAILURE); */
     }
 }
 
